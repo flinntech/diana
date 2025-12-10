@@ -25,7 +25,7 @@ export type Severity = 'info' | 'warning' | 'error';
 export type ProposalStatus = 'pending' | 'approved' | 'rejected';
 
 /** System note categories */
-export type SystemCategory = 'health' | 'error' | 'config' | 'startup' | 'shutdown';
+export type SystemCategory = 'health' | 'maintenance' | 'error' | 'config' | 'startup' | 'shutdown';
 
 /** Note types */
 export type NoteType = 'daily-log' | 'observation' | 'proposal' | 'system' | 'index';
