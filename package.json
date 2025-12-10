@@ -1,0 +1,40 @@
+{
+  "name": "diana",
+  "version": "1.0.0",
+  "description": "Digital Intelligence And Neural Architecture - A local-first AI assistant",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "vitest",
+    "test:unit": "vitest run --filter unit",
+    "test:integration": "vitest run --filter integration"
+  },
+  "keywords": [
+    "ai",
+    "assistant",
+    "local-first",
+    "obsidian"
+  ],
+  "author": "",
+  "license": "ISC",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "date-fns": "^4.1.0",
+    "gray-matter": "^4.0.3",
+    "proper-lockfile": "^4.1.2",
+    "write-file-atomic": "^7.0.0"
+  },
+  "devDependencies": {
+    "@types/mock-fs": "^4.13.4",
+    "@types/node": "^25.0.0",
+    "@types/proper-lockfile": "^4.1.4",
+    "mock-fs": "^5.5.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.15"
+  }
+}
