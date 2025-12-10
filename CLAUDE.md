@@ -58,3 +58,10 @@ specify init --here --ai claude   # Initialize spec-kit
 ```
 
 Project principles are documented in `.specify/memory/constitution.md`.
+
+## Active Technologies
+- Node.js with TypeScript (ES modules, strict mode) (001-obsidian-integration)
+- File system - Obsidian vault at `/mnt/c/Users/joshu/Obsidian/DIANA/DIANA_brain` (001-obsidian-integration)
+
+## Recent Changes
+- 001-obsidian-integration: Added Node.js with TypeScript (ES modules, strict mode)
