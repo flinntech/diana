@@ -37,6 +37,31 @@ const DEFAULT_SUMMARIZATION_THRESHOLD = 25000;
 const MAX_TOOL_ITERATIONS = 10;
 
 // =============================================================================
+// Helper Functions
+// =============================================================================
+
+/**
+ * Parse tool call arguments which may be a JSON string or already an object
+ * Ollama may return arguments in either format
+ */
+function parseToolArguments(
+  rawArgs: string | Record<string, unknown>
+): Record<string, unknown> {
+  if (typeof rawArgs === 'object' && rawArgs !== null) {
+    return rawArgs;
+  }
+  if (typeof rawArgs === 'string') {
+    try {
+      return JSON.parse(rawArgs);
+    } catch {
+      console.error(`[Tool] Failed to parse arguments: "${rawArgs}"`);
+      return {};
+    }
+  }
+  return {};
+}
+
+// =============================================================================
 // Types
 // =============================================================================
 
@@ -272,30 +297,11 @@ export class Session implements ISession {
 
         // Execute each tool call and add results
         for (const toolCall of toolCalls) {
+          const args = parseToolArguments(toolCall.function.arguments);
+
           // Notify about tool call
           if (this.onToolCall) {
-            const rawArgs = toolCall.function.arguments;
-            const parsedArgs = typeof rawArgs === 'object' ? rawArgs :
-              (() => { try { return JSON.parse(rawArgs); } catch { return rawArgs; } })();
-            this.onToolCall(toolCall.function.name, parsedArgs);
-          }
-
-          // Execute the tool - handle both string and object arguments
-          // Ollama may return arguments as an object or a JSON string
-          let args: Record<string, unknown>;
-          const rawArgs = toolCall.function.arguments;
-          if (typeof rawArgs === 'object' && rawArgs !== null) {
-            // Arguments are already an object
-            args = rawArgs as Record<string, unknown>;
-          } else if (typeof rawArgs === 'string') {
-            try {
-              args = JSON.parse(rawArgs);
-            } catch {
-              console.error(`[Tool] Failed to parse arguments: "${rawArgs}"`);
-              args = {};
-            }
-          } else {
-            args = {};
+            this.onToolCall(toolCall.function.name, args);
           }
 
           const result = await this.toolRegistry.execute(
