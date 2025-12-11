@@ -62,6 +62,8 @@ Project principles are documented in `.specify/memory/constitution.md`.
 ## Active Technologies
 - Node.js with TypeScript (ES modules, strict mode) (001-obsidian-integration)
 - File system - Obsidian vault at `/mnt/c/Users/joshu/Obsidian/DIANA/DIANA_brain` (001-obsidian-integration)
+- Node.js 18+ with TypeScript 5.9 (ES modules, strict mode) (002-llm-agent-core)
+- File system (Obsidian vault markdown files) (002-llm-agent-core)
 
 ## Recent Changes
 - 001-obsidian-integration: Added Node.js with TypeScript (ES modules, strict mode)
