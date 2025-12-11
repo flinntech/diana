@@ -112,7 +112,7 @@ export class ObsidianWriter implements IObsidianWriter {
   constructor(config: ObsidianWriterConfig) {
     this.config = {
       vaultPath: config.vaultPath,
-      fallbackLogPath: config.fallbackLogPath || '/home/diana/logs',
+      fallbackLogPath: config.fallbackLogPath || `${process.env.HOME}/.diana/logs`,
       dateFormat: config.dateFormat || 'yyyy-MM-dd',
       maxRetries: config.maxRetries || 3,
       lockTimeout: config.lockTimeout || 10000,

@@ -5,6 +5,9 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "diana": "./dist/cli/index.js"
+  },
   "scripts": {
     "build": "tsc",
     "start": "node dist/index.js",
@@ -24,12 +27,15 @@
     "node": ">=18.0.0"
   },
   "dependencies": {
+    "chalk": "^5.6.2",
+    "commander": "^14.0.2",
     "date-fns": "^4.1.0",
     "gray-matter": "^4.0.3",
     "proper-lockfile": "^4.1.2",
     "write-file-atomic": "^7.0.0"
   },
   "devDependencies": {
+    "@commander-js/extra-typings": "^14.0.0",
     "@types/mock-fs": "^4.13.4",
     "@types/node": "^25.0.0",
     "@types/proper-lockfile": "^4.1.4",
