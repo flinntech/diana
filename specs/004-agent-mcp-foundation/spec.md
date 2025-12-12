@@ -91,14 +91,18 @@ Administrators can start, stop, and check the health of agents. This enables ope
 - **FR-008**: System MUST route tool execution requests to the appropriate agent based on tool name.
 - **FR-009**: System MUST support agent lifecycle operations: start, stop, and health check.
 - **FR-010**: System MUST wrap existing tools (save_fact, obsidian logging) as agents while maintaining backward compatibility.
-- **FR-011**: System MUST enforce human-in-the-loop approval for any destructive actions proposed by agents.
+- **FR-011**: System MUST enforce human-in-the-loop approval for any destructive actions proposed by agents. Destructive actions are defined as: actions that are irreversible OR affect data outside DIANA's control (file modifications, external API calls, shell command execution).
 - **FR-012**: System MUST operate entirely locally without requiring cloud services.
 - **FR-013**: System MUST NOT break existing chat or file watcher functionality.
+- **FR-014**: System MUST provide a tool manifest to the LLM context containing all available tools; the LLM returns tool call intents which the orchestrator executes on behalf of the LLM.
+- **FR-015**: System MUST produce structured logs for agent lifecycle events (start, stop, health check) and tool execution (request, success, failure).
+- **FR-016**: System MUST track metrics for tool execution counts and latencies per agent/tool.
+- **FR-017**: System MUST assign correlation IDs to requests for end-to-end tracing across orchestrator and agents.
 
 ### Key Entities
 
 - **Agent**: A capability provider with a standard interface. Has a unique identifier, lifecycle state (initialized/running/stopped), and exposes one or more tools.
-- **Tool**: A discrete operation an agent can perform. Has a name, description, input parameters schema, and output type.
+- **Tool**: A discrete operation an agent can perform. Has a name, description, input parameters schema (JSON Schema format for MCP compatibility), and output type.
 - **Orchestrator**: The central coordinator that maintains the agent registry, routes requests, and manages agent lifecycles.
 - **MCP Server**: An external service that provides tools via the Model Context Protocol. The system connects as an MCP client.
 - **Agent Registry**: A collection of registered agents and their associated tools, maintained by the orchestrator.
@@ -107,12 +111,52 @@ Administrators can start, stop, and check the health of agents. This enables ope
 
 ### Measurable Outcomes
 
-- **SC-001**: Tool execution through agents completes within 5 seconds for standard operations (excluding long-running tasks).
+- **SC-001**: Orchestrator routing overhead (request dispatch to agent and response relay) completes within 5 seconds, excluding actual tool execution time which may take up to 30 seconds.
 - **SC-002**: All existing DIANA tools remain functional with identical behavior after agent system integration.
 - **SC-003**: MCP server disconnection is detected and handled within 10 seconds without user-facing errors beyond unavailability messages.
 - **SC-004**: The system can register at least 10 agents with 50+ total tools without performance degradation.
 - **SC-005**: Agent health checks complete and return status within 1 second.
 - **SC-006**: Zero regressions in existing chat and file watcher functionality as verified by integration tests.
+
+## Clarifications
+
+### Session 2025-12-12
+
+- Q: How do the different timeout values (5s, 10s, 30s) relate to each other? → A: Tiered timeouts - 5s = orchestrator routing overhead, 30s = tool execution limit, 10s = MCP health/disconnection detection.
+- Q: What qualifies as a "destructive action" requiring human approval? → A: Actions that are irreversible OR affect data outside DIANA's control (files, external APIs, shell commands).
+- Q: What format should tool parameter schemas use? → A: JSON Schema (MCP standard, widely supported, self-documenting).
+- Q: How does the LLM discover and invoke tools? → A: Orchestrator provides tool manifest to LLM context; LLM returns tool call intents that orchestrator executes.
+- Q: What observability requirements apply? → A: Comprehensive - structured logs, metrics (execution counts, latencies), and request correlation IDs.
+- Q: How should the human-in-the-loop approval workflow function? → A: Asynchronous - agents create proposals in proposals.json; users review/approve via `diana proposals` / `diana approve <id>` (consistent with Feature 003 pattern).
+- Q: How should the Agent Registry relate to the existing tool registry? → A: Replacement - Agent Registry becomes the sole registry; existing tools are wrapped as agents for backward compatibility.
+- Q: What are the input/output types for `execute(toolName, params)`? → A: Params: `Record<string, unknown>`, Return: `Promise<ToolResult>` where `ToolResult = {success: boolean, data?: unknown, error?: string}` (matches existing DIANA pattern).
+- Q: What are the return values for `initialize()` and `shutdown()`? → A: Both return `Promise<void>`; throw `AgentError` with specific error codes on failure.
+- Q: What error codes should be defined for agent operations? → A: Extend existing `AgentErrorCode` with: AGENT_INIT_FAILED, AGENT_SHUTDOWN_FAILED, AGENT_NOT_FOUND, AGENT_UNAVAILABLE, TOOL_EXECUTION_TIMEOUT.
+- Q: What is the async tool execution contract? → A: All tools return `Promise<ToolResult>` (unified interface); "sync" tools resolve quickly, "async" tools may take longer.
+- Q: What is the tool description format? → A: Structured metadata: `{description: string, examples?: string[], category?: string}` for richer LLM context.
+- Q: How do agents register with the orchestrator? → A: Factory pattern - `orchestrator.registerAgentFactory(name, factory)`; orchestrator instantiates agents when needed.
+- Q: What is the interface versioning strategy? → A: Semantic versioning with deprecation warnings for 1 release before removal; document changes in CHANGELOG.
+- Q: How are new lifecycle states handled? → A: Start with 3 states (initialized/running/stopped); use extensible string union type for future additions.
+- Q: How do agents declare their capabilities? → A: Manifest method - `getManifest(): AgentManifest` returning `{id, name, tools, capabilities: string[], requiresApproval: boolean}`.
+- Q: How is custom tool parameter validation handled? → A: Layered - orchestrator validates JSON Schema first; agent's `execute()` can add business logic validation and return error in ToolResult.
+- Q: Which interfaces are stable vs. internal? → A: Minimal stable surface - only `Agent` interface and `ToolResult` type are stable; orchestrator internals and registry methods may change (early development flexibility).
+- Q: Which MCP protocol version should be targeted? → A: Latest stable MCP spec at implementation time; document version in config/comments.
+- Q: How should existing tools be wrapped as agents? → A: Facade pattern - `LegacyToolAgent` adapter wraps any `(params) => Promise<result>` function to Agent interface; transitional until tools are replaced by future features.
+- Q: How are MCP servers configured? → A: Config file - `config/mcp-servers.json` array of `{name, url, timeout?, auth?}` entries; timeout defaults to 10s; auth optional for local servers.
+- Q: How does the agent system integrate with the file watcher? → A: No integration - file watcher remains independent; agent system is additive. FR-013 requires no breakage, not integration.
+- Q: How does the chat system integrate with the agent system? → A: Chat routes tool calls through orchestrator - Session class calls `orchestrator.execute()` instead of direct tool registry; unified access to all tools (legacy + MCP).
+- Q: What retry behavior applies to MCP server failures? → A: Simple retry - 1 retry with 3s delay for connection/timeout errors only; fail immediately for other errors.
+- Q: What happens when an agent crashes mid-execution? → A: Fail request only - orchestrator catches exception, returns ToolResult with `{success: false, error}`, agent remains registered and available.
+- Q: How are partial failures handled (some tools available, others not)? → A: Agent-level with error passthrough - orchestrator tracks agent availability; if agent is running, all its tools are "available"; individual tool failures returned in ToolResult.
+- Q: What happens to agent state after orchestrator restart? → A: Stateless restart - orchestrator initializes fresh, re-reads config, connects to MCP servers, registers agents via factories; no persistent state; in-flight requests lost.
+- Q: Is there circuit breaker behavior for repeatedly failing agents? → A: No circuit breaker for V1 - each request goes to agent, failures returned in ToolResult; metrics surface failure patterns; can add circuit breaker later if needed.
+- Q: What happens when a disconnected MCP server becomes available again? → A: Auto-reconnect polling - check disconnected servers every 30s; on success, re-discover tools and log reconnection event.
+- Q: How does graceful shutdown work for agents? → A: Best-effort parallel - call `shutdown()` on all agents concurrently; 5s timeout per agent; log failures but don't block DIANA shutdown.
+- Q: What happens if some agents fail to initialize during startup? → A: Continue with partial - successfully initialized agents stay running; failed agents logged and skipped; health checks reveal which agents failed.
+- Q: What does "performance degradation" mean in SC-004? → A: Routing overhead (SC-001's 5s limit) remains achievable with 10 agents/50+ tools; if routing stays under 5s at scale, performance is acceptable.
+- Q: Are there memory/resource limits per agent? → A: No limits for V1 - agents share process resources; metrics provide visibility; can add limits later if needed or when moving to process separation.
+- Q: Is there queue/backpressure handling for rapid requests? → A: No explicit queue - orchestrator dispatches immediately; async Promise execution handles concurrency naturally; rate limiting can be added later if needed.
+- Q: Do pending approval proposals expire? → A: No expiry for V1 - proposals persist in proposals.json until explicitly approved or rejected; matches Feature 003 pattern.
 
 ## Assumptions
 
