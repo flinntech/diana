@@ -12,6 +12,9 @@ import chalk from 'chalk';
 import { Session } from '../agent/session.js';
 import { config } from '../config/diana.config.js';
 import type { ChatCommandOptions } from '../types/agent.js';
+import { createProposalService } from '../proposals/index.js';
+import { createWatcherService } from '../watcher/index.js';
+import { ObsidianWriter } from '../obsidian/index.js';
 
 // =============================================================================
 // Constants
@@ -215,8 +218,33 @@ export async function chatCommand(options: ChatCommandOptions = {}): Promise<voi
     process.stdout.write(DIANA_PREFIX);
   };
 
-  // Create session with tool call handler
-  const session = new Session(config, { onToolCall });
+  // Create proposal and watcher services (Feature: 003-file-watcher-proposals)
+  const watcherConfig = config.watcher;
+  const proposalService = watcherConfig
+    ? createProposalService(watcherConfig.proposalStorePath, {
+        cooldownHours: watcherConfig.cooldownHours,
+      })
+    : undefined;
+
+  const watcherService =
+    watcherConfig && proposalService
+      ? createWatcherService(watcherConfig, proposalService)
+      : undefined;
+
+  // Set up Obsidian writer for audit logging (approvals/rejections)
+  if (config.obsidian && proposalService) {
+    const obsidianWriter = new ObsidianWriter(config.obsidian);
+    proposalService.setObsidianWriter(obsidianWriter);
+  }
+
+  // Create session with tool call handler and services
+  // Note: watcher is NOT auto-started here - it runs as a separate systemd service
+  const session = new Session(config, {
+    onToolCall,
+    proposalService,
+    watcherService,
+    autoStartWatcher: false,
+  });
 
   // Handle Ctrl+C gracefully
   let isShuttingDown = false;
@@ -228,6 +256,10 @@ export async function chatCommand(options: ChatCommandOptions = {}): Promise<voi
     isShuttingDown = true;
     console.log('');
     await session.close();
+    // Shutdown proposal service (Feature: 003)
+    if (proposalService) {
+      await proposalService.shutdown();
+    }
     printGoodbye();
     process.exit(0);
   };
@@ -236,6 +268,14 @@ export async function chatCommand(options: ChatCommandOptions = {}): Promise<voi
   process.on('SIGTERM', handleSignal);
 
   try {
+    // Initialize services (Feature: 003)
+    if (proposalService) {
+      if (debug) {
+        console.log(chalk.dim('[DEBUG] Initializing proposal service...'));
+      }
+      await proposalService.initialize();
+    }
+
     // Initialize session
     if (debug) {
       console.log(chalk.dim('[DEBUG] Initializing session...'));
@@ -272,6 +312,10 @@ export async function chatCommand(options: ChatCommandOptions = {}): Promise<voi
       if (EXIT_COMMANDS.includes(trimmedInput.toLowerCase())) {
         rl.close();
         await session.close();
+        // Shutdown proposal service (Feature: 003)
+        if (proposalService) {
+          await proposalService.shutdown();
+        }
         printGoodbye();
         break;
       }

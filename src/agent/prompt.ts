@@ -21,6 +21,9 @@ export interface PromptVariables {
 
   /** Key facts about the user in markdown format */
   KEY_FACTS?: string;
+
+  /** Current context (date, platform, etc.) */
+  CURRENT_CONTEXT?: string;
 }
 
 // =============================================================================
@@ -86,6 +89,13 @@ export class SystemPromptLoader {
       prompt = prompt.replace('{{KEY_FACTS}}', variables.KEY_FACTS);
     } else {
       prompt = prompt.replace('{{KEY_FACTS}}', '_No facts recorded yet_');
+    }
+
+    // Inject CURRENT_CONTEXT
+    if (variables.CURRENT_CONTEXT !== undefined) {
+      prompt = prompt.replace('{{CURRENT_CONTEXT}}', variables.CURRENT_CONTEXT);
+    } else {
+      prompt = prompt.replace('{{CURRENT_CONTEXT}}', '_Context not available_');
     }
 
     return prompt;

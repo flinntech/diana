@@ -1,11 +1,13 @@
 /**
  * DIANA Configuration
  *
- * Features: 001-obsidian-integration, 002-llm-agent-core
+ * Features: 001-obsidian-integration, 002-llm-agent-core, 003-file-watcher-proposals
  */
 
 import type { ObsidianWriterConfig } from '../types/obsidian.js';
 import type { OllamaConfig, DianaConfig as DianaConfigType } from '../types/agent.js';
+import type { WatcherConfig } from '../types/watcher.js';
+import { DEFAULT_WATCHER_CONFIG } from '../types/watcher.js';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -57,10 +59,22 @@ export const ollamaConfig: OllamaConfig = {
 };
 
 /**
- * Full DIANA configuration
- * Extends with LLM agent settings for 002-llm-agent-core
+ * Default watcher configuration
+ * Feature: 003-file-watcher-proposals
  */
-export interface DianaConfig extends DianaConfigType {}
+export const watcherConfig: WatcherConfig = {
+  ...DEFAULT_WATCHER_CONFIG,
+  // Override default proposal store path to be relative to home
+  proposalStorePath: process.env.DIANA_PROPOSALS_PATH || `${process.env.HOME}/.diana/proposals.json`,
+};
+
+/**
+ * Full DIANA configuration
+ * Extends with LLM agent settings for 002-llm-agent-core and watcher for 003
+ */
+export interface DianaConfig extends DianaConfigType {
+  watcher?: WatcherConfig;
+}
 
 /**
  * Default configuration
@@ -70,6 +84,7 @@ export const config: DianaConfig = {
   ollama: ollamaConfig,
   systemPromptPath: path.join(PROJECT_ROOT, 'src/config/system-prompt.md'),
   memoryPath: path.join(obsidianConfig.vaultPath, 'memory/facts.md'),
+  watcher: watcherConfig,
 };
 
 /**
@@ -84,6 +99,10 @@ export function createConfig(overrides: Partial<DianaConfig> = {}): DianaConfig 
     ollama: {
       ...ollamaConfig,
       ...overrides.ollama,
+    },
+    watcher: {
+      ...watcherConfig,
+      ...overrides.watcher,
     },
     systemPromptPath: overrides.systemPromptPath ?? config.systemPromptPath,
     memoryPath: overrides.memoryPath ?? config.memoryPath,

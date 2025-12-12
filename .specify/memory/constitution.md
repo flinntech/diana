@@ -1,18 +1,17 @@
 <!--
 Sync Impact Report
 ==================
-Version change: N/A (initial) → 1.0.0
-Modified principles: N/A (initial creation)
+Version change: 1.0.0 → 1.1.0
+Modified principles: None renamed
 Added sections:
-  - Core Principles (8 principles)
-  - Technology Stack
-  - Development Workflow
-  - Governance
-Removed sections: N/A (template placeholders replaced)
+  - Principle IX: Agent-First Design (new)
+  - Architecture Vision (new section with current/future diagrams)
+  - Technology Stack updated with future architecture elements
+Removed sections: None
 Templates requiring updates:
   - .specify/templates/plan-template.md: ✅ Compatible (Constitution Check is generic)
   - .specify/templates/spec-template.md: ✅ Compatible (requirements structure aligns)
-  - .specify/templates/tasks-template.md: ✅ Compatible (task patterns support test-first)
+  - .specify/templates/tasks-template.md: ✅ Compatible (task patterns support agent modules)
 Follow-up TODOs: None
 -->
 
@@ -68,14 +67,84 @@ Behavior MUST be deterministic given the same inputs. Organization rules MUST be
 
 **Rationale**: Predictability enables trust. Users must understand why DIANA makes each proposal.
 
+### IX. Agent-First Design
+
+New capabilities MUST be structured as agent modules with clean interfaces. Agents MUST communicate through the orchestrator, not directly with each other. Each agent MUST be designed for eventual process separation. Tool interfaces SHOULD use MCP (Model Context Protocol) for standardization and ecosystem compatibility.
+
+**Rationale**: DIANA will grow into a multi-agent system. Designing for separation now prevents painful refactoring later and enables tool reuse across LLM applications.
+
+## Architecture Vision
+
+### Current Architecture (Monolith)
+
+```
+CLI → Session → Ollama
+         ↓
+    Tool Registry → Tools (all in-process)
+```
+
+### Target Architecture (Multi-Agent Microservices)
+
+```
+                    ┌─────────────────┐
+                    │  Orchestrator   │
+                    │    (DIANA)      │
+                    └────────┬────────┘
+                             │
+        ┌────────────────────┼────────────────────┐
+        ▼                    ▼                    ▼
+┌───────────────┐  ┌───────────────┐  ┌───────────────┐
+│  Web Agent    │  │ Productivity  │  │ System Agent  │
+│ (search/fetch)│  │    Agent      │  │ (shell/files) │
+└───────────────┘  │ (Reclaim.ai)  │  └───────────────┘
+                   └───────────────┘
+        ┌────────────────────┼────────────────────┐
+        ▼                    ▼                    ▼
+┌───────────────┐  ┌───────────────┐  ┌───────────────┐
+│ Voice Agent   │  │ Memory Agent  │  │  Home Agent   │
+│  (STT/TTS)    │  │  (RAG/facts)  │  │(Home Assistant)│
+└───────────────┘  └───────────────┘  └───────────────┘
+```
+
+### Architecture Decisions
+
+1. **Communication**: HTTP REST for synchronous calls + Redis pub/sub for events
+   - Request/response patterns use REST
+   - Events (file changes, reminders, proactive alerts) use pub/sub
+   - Redis provides lightweight, local-friendly caching
+
+2. **Runtime**: In-process modules designed for separation
+   - Start with everything in one process
+   - Each agent is a module with clean interface
+   - Agents communicate through orchestrator, not directly
+   - Extract to separate process when needed (crashy, slow, resource-heavy)
+
+3. **Evolution**: Design now, implement incrementally
+   - Define Agent interface before building capabilities
+   - Structure new features as agent modules
+   - Build orchestrator routing logic early
+   - Defer process separation until pain hits
+
+4. **Tool Interface**: MCP servers where possible
+   - Use Model Context Protocol for standardized tool exposure
+   - Enables tool reuse across different LLM applications
+   - Each agent can expose capabilities as MCP server
+   - Leverage existing MCP ecosystem (filesystem, git, etc.)
+
 ## Technology Stack
 
-**Required Technologies**:
+**Current Technologies**:
 - Runtime: Node.js with TypeScript (strict mode)
 - LLM: Ollama with qwen3:30b-a3b (local inference only)
 - Vector Storage: ChromaDB (embedded mode)
 - File Watching: chokidar
 - Logging: Obsidian vault (Markdown files)
+
+**Future Architecture Additions**:
+- Inter-agent Communication: HTTP REST + Redis pub/sub
+- Tool Protocol: MCP (Model Context Protocol) servers
+- Voice: Whisper (STT), Edge TTS/Piper (TTS)
+- Productivity: Reclaim.ai API
 
 **Constraints**:
 - No cloud APIs for core functionality
@@ -90,12 +159,15 @@ Behavior MUST be deterministic given the same inputs. Organization rules MUST be
 - Integration tests MUST verify human-approval flow
 - No PR may disable or skip the approval mechanism
 - Logging coverage: every public function that affects state MUST log
+- New capabilities MUST follow agent module pattern
 
 **Code Review Checklist**:
 1. Does this change respect local-first privacy?
 2. Are file operations gated by human approval?
 3. Is the behavior logged and predictable?
 4. Does it degrade gracefully on dependency failure?
+5. Is this structured as an agent module with clean interface?
+6. Does it use MCP for tool exposure where applicable?
 
 ## Governance
 
@@ -108,5 +180,6 @@ This constitution supersedes all other practices and documentation. Amendments r
 All code changes MUST verify compliance with these principles. Complexity or principle violations MUST be explicitly justified in PR descriptions.
 
 See `CLAUDE.md` for runtime development guidance.
+See `docs/CAPABILITY_ROADMAP.md` for build order and architecture details.
 
-**Version**: 1.0.0 | **Ratified**: 2025-12-10 | **Last Amended**: 2025-12-10
+**Version**: 1.1.0 | **Ratified**: 2025-12-10 | **Last Amended**: 2025-12-11
