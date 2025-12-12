@@ -52,10 +52,31 @@ This project uses Spec-Driven Development with GitHub Spec Kit:
 ```bash
 specify init --here --ai claude   # Initialize spec-kit
 /speckit.specify <feature>        # Create feature specification
+# >>> GIT CHECKPOINT HERE <<<     # Commit spec.md before planning
+/speckit.checklist <domain>       # Optional: validate requirements quality
+/speckit.clarify                  # Ask clarifying questions, refine spec
 /speckit.plan <requirements>      # Generate implementation plan
 /speckit.tasks                    # Generate tasks
+/speckit.analyze                  # Cross-artifact consistency check
 /speckit.implement                # Implement
 ```
+
+**Git Checkpoints:** Always create a commit after `/speckit.specify` completes. This provides a rollback point if the spec needs adjustment before regenerating code. Commit message format: `docs(spec): add <feature-name> specification`
+
+**Quality Gates:**
+- `/speckit.checklist <domain>` - Run after checkpoint, before clarify (see domain guidance below)
+- `/speckit.clarify` - Run after checklist to identify underspecified areas
+- `/speckit.analyze` - Run after tasks to verify consistency across spec, plan, and tasks
+
+**Checklist Domains** (use judgment - not every feature needs a checklist):
+- `requirements` - Default for complex features with many moving parts
+- `local-first` - Features touching external APIs, user data, or cloud services
+- `human-in-the-loop` - Features with destructive actions (file ops, email send, shell)
+- `architecture` - Foundational features that other features depend on
+- `api` - Features exposing new tool interfaces
+
+*Skip checklists for:* Simple integrations, minor enhancements, well-understood patterns.
+*One checklist per feature is usually sufficient.* Pick the most relevant domain.
 
 Project principles are documented in `.specify/memory/constitution.md`.
 
