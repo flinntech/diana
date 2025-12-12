@@ -7,9 +7,7 @@
 import { readFile, writeFile as writeFileFs, mkdir, access, readdir, stat, appendFile } from 'fs/promises';
 import { constants } from 'fs';
 import { join, dirname } from 'path';
-// @ts-expect-error - write-file-atomic is CommonJS
-import writeFileAtomicPkg from 'write-file-atomic';
-const writeFileAtomic = writeFileAtomicPkg;
+import writeFileAtomic from 'write-file-atomic';
 import * as lockfile from 'proper-lockfile';
 import type {
   IObsidianWriter,

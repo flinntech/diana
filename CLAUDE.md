@@ -64,6 +64,8 @@ Project principles are documented in `.specify/memory/constitution.md`.
 - File system - Obsidian vault at `/mnt/c/Users/joshu/Obsidian/DIANA/DIANA_brain` (001-obsidian-integration)
 - Node.js 18+ with TypeScript 5.9 (ES modules, strict mode) (002-llm-agent-core)
 - File system (Obsidian vault markdown files) (002-llm-agent-core)
+- TypeScript 5.9+ with Node.js 18+ (ES modules, strict mode) + chokidar ^4.0.0, existing DIANA framework (date-fns, gray-matter) (003-file-watcher-proposals)
+- JSON file (`/home/diana/proposals.json`) + Obsidian vault (audit logs) (003-file-watcher-proposals)
 
 ## Recent Changes
 - 001-obsidian-integration: Added Node.js with TypeScript (ES modules, strict mode)

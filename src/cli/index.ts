@@ -12,6 +12,7 @@ import { Command } from 'commander';
 import { statusCommand } from './status.js';
 import { chatCommand } from './chat.js';
 import { askCommand } from './ask.js';
+import { watchCommand } from './watch.js';
 
 // =============================================================================
 // CLI Setup
@@ -45,6 +46,13 @@ program
   .option('-d, --debug', 'Enable debug output')
   .option('-f, --format <format>', 'Output format (text or json)', 'text')
   .action(askCommand);
+
+// Watch command (daemon mode)
+program
+  .command('watch')
+  .description('Run file watcher daemon (monitors directories for new files)')
+  .option('-d, --debug', 'Enable debug output')
+  .action(watchCommand);
 
 // Parse arguments and execute
 program.parse();

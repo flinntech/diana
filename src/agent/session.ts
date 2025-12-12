@@ -24,7 +24,10 @@ import { ToolRegistry } from './tools.js';
 import { KeyFactStore } from './memory.js';
 import { registerObsidianTools } from './tools/obsidian.js';
 import { registerMemoryTools } from './tools/memory.js';
+import { registerProposalTools, registerWatcherTools } from './tools/watcher.js';
 import { ObsidianWriter } from '../obsidian/writer.js';
+import type { ProposalService } from '../proposals/index.js';
+import type { WatcherService } from '../watcher/index.js';
 
 // =============================================================================
 // Constants
@@ -39,6 +42,23 @@ const MAX_TOOL_ITERATIONS = 10;
 // =============================================================================
 // Helper Functions
 // =============================================================================
+
+/**
+ * Generate current context string for system prompt injection
+ * Provides DIANA with basic situational awareness (date, platform)
+ */
+function generateCurrentContext(): string {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('en-US', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+
+  return `- **Today**: ${dateStr}
+- **Platform**: ${process.platform}`;
+}
 
 /**
  * Parse tool call arguments which may be a JSON string or already an object
@@ -78,6 +98,12 @@ export interface SessionOptions {
   onToolCall?: ToolCallHandler;
   /** Skip registering default Obsidian tools */
   skipDefaultTools?: boolean;
+  /** ProposalService for file organization tools (Feature: 003) */
+  proposalService?: ProposalService;
+  /** WatcherService for file system monitoring (Feature: 003) */
+  watcherService?: WatcherService;
+  /** Auto-start watcher on initialization (default: true if watcherService provided) */
+  autoStartWatcher?: boolean;
 }
 
 // =============================================================================
@@ -99,6 +125,8 @@ export class Session implements ISession {
   private readonly summarizationThreshold: number;
   private readonly onToolCall?: ToolCallHandler;
   private readonly skipDefaultTools: boolean;
+  private readonly watcherService?: WatcherService;
+  private readonly autoStartWatcher: boolean;
 
   constructor(config: DianaConfig, options: SessionOptions = {}) {
     this.config = config;
@@ -110,6 +138,8 @@ export class Session implements ISession {
       options.summarizationThreshold ?? DEFAULT_SUMMARIZATION_THRESHOLD;
     this.onToolCall = options.onToolCall;
     this.skipDefaultTools = options.skipDefaultTools ?? false;
+    this.watcherService = options.watcherService;
+    this.autoStartWatcher = options.autoStartWatcher ?? (!!options.watcherService);
 
     // Initialize tool registry
     this.toolRegistry = options.toolRegistry ?? new ToolRegistry();
@@ -117,6 +147,16 @@ export class Session implements ISession {
     // Register default Obsidian tools unless skipped
     if (!this.skipDefaultTools) {
       registerObsidianTools(this.toolRegistry, config.obsidian);
+    }
+
+    // Register proposal tools if ProposalService is provided (Feature: 003)
+    if (options.proposalService) {
+      registerProposalTools(this.toolRegistry, options.proposalService);
+    }
+
+    // Register watcher tools if WatcherService is provided (Feature: 003)
+    if (options.watcherService) {
+      registerWatcherTools(this.toolRegistry, options.watcherService);
     }
   }
 
@@ -178,13 +218,19 @@ export class Session implements ISession {
         registerMemoryTools(this.toolRegistry, this.keyFactStore);
       }
 
-      // Create conversation with system prompt (including tool descriptions and key facts)
+      // Create conversation with system prompt (including tool descriptions, key facts, and current context)
       const systemPrompt = this.promptLoader.getPrompt({
         TOOL_DESCRIPTIONS: this.toolRegistry.getDescriptions(),
         KEY_FACTS: this.keyFactStore.getContextString(),
+        CURRENT_CONTEXT: generateCurrentContext(),
       });
 
       this.conversation = new ConversationManager(systemPrompt);
+
+      // Start file watcher if configured (Feature: 003)
+      if (this.watcherService && this.autoStartWatcher) {
+        await this.watcherService.start();
+      }
 
       this.state = 'ready';
     } catch (error) {
@@ -346,6 +392,11 @@ export class Session implements ISession {
     this.state = 'terminating';
 
     try {
+      // Stop file watcher if running (Feature: 003)
+      if (this.watcherService?.isRunning()) {
+        await this.watcherService.stop();
+      }
+
       // Log conversation to Obsidian
       if (this.conversation && this.conversation.getMessageCount() > 1) {
         await this.logConversation();
@@ -423,6 +474,69 @@ export class Session implements ISession {
   }
 
   /**
+   * Generate a brief summary of the session for the daily log
+   *
+   * Returns null if the conversation is too short or if generation fails.
+   */
+  private async generateSessionSummary(): Promise<string | null> {
+    if (!this.conversation) return null;
+
+    // Get user/assistant messages only (skip system, tool messages)
+    const messages = this.conversation.getMessages();
+    const relevantMessages = messages.filter(
+      (m) => m.role === 'user' || m.role === 'assistant'
+    );
+
+    // Skip summary for very short sessions
+    if (relevantMessages.length < 2) {
+      return null;
+    }
+
+    try {
+      // Format messages, truncating long content
+      const formatted = relevantMessages
+        .map((m) => {
+          const role = m.role === 'user' ? 'User' : 'Assistant';
+          const content =
+            m.content.length > 1000
+              ? m.content.substring(0, 1000) + '...'
+              : m.content;
+          return `${role}: ${content}`;
+        })
+        .join('\n\n');
+
+      // Generate summary
+      const summaryMessages: Message[] = [
+        {
+          role: 'system',
+          content:
+            'You are summarizing a conversation for a daily activity log. Create a brief summary (2-4 sentences) that captures what was discussed or accomplished, any actions taken or decisions made, and key outcomes. Be concise and factual. Write in past tense. Do not include greetings.',
+        },
+        {
+          role: 'user',
+          content: `Summarize this conversation for a daily log:\n\n${formatted}\n\nSummary:`,
+        },
+      ];
+
+      const request = {
+        model: this.config.ollama.model,
+        messages: summaryMessages,
+        stream: false,
+      };
+
+      const response = await this.ollamaClient.chatComplete(request);
+      return response.message.content.trim();
+    } catch (error) {
+      // Log error but don't fail - summary is optional
+      console.error(
+        '[Session] Failed to generate session summary:',
+        error instanceof Error ? error.message : error
+      );
+      return null;
+    }
+  }
+
+  /**
    * Log the conversation to Obsidian daily log
    */
   private async logConversation(): Promise<void> {
@@ -439,10 +553,17 @@ export class Session implements ISession {
       (Date.now() - startTime.getTime()) / 1000 / 60
     ); // minutes
 
-    const summary = `Chat session with DIANA (${messageCount} messages, ${duration} min)`;
+    // Generate LLM summary of the conversation
+    const sessionSummary = await this.generateSessionSummary();
+
+    // Build activity text
+    let activity = `Chat session with DIANA (${messageCount} messages, ${duration} min)`;
+    if (sessionSummary) {
+      activity += `\n\n${sessionSummary}`;
+    }
 
     await this.obsidianWriter.writeDaily({
-      activity: summary,
+      activity,
       title: 'DIANA Conversation',
     });
   }
