@@ -55,6 +55,7 @@ Building toward JARVIS - a truly useful AI assistant.
 | Multi-step planning    | 8     | 3      | 2.67  | Single-agent ReAct loops within domain   |
 | Code execution         | 7     | 3      | 2.33  | Sandboxed Python/JS                      |
 | **Architecture**       |       |        |       |                                          |
+| Conversation persist.  | 9     | 1      | 9.0   | Save/resume conversations, list history  |
 | Plugin architecture    | 8     | 3      | 2.67  | MCP servers + Agent interface            |
 | Task Breakdown Agent   | 8     | 3      | 2.67  | Planning/decomposition for multi-agent workflows, approval orchestration |
 | Multi-agent system     | 8     | 4      | 2.0   | Orchestrator + specialized agents        |
@@ -69,8 +70,9 @@ Building toward JARVIS - a truly useful AI assistant.
 ### Phase 0: Architecture Foundation
 
 1. **Agent + MCP foundation** - Agent interface + MCP client pattern
-2. **File System Agent** (4.0) - Unified file expert: content search (Windows Index + WSL), CRUD, watch mode, compound ops like "find and organize"
-3. **Task Breakdown Agent** (2.67) - Planning/decomposition for multi-agent workflows
+2. **Conversation Persistence** (9.0) - Save and resume conversations across sessions
+3. **File System Agent** (4.0) - Unified file expert: content search (Windows Index + WSL), CRUD, watch mode, compound ops like "find and organize"
+4. **Task Breakdown Agent** (2.67) - Planning/decomposition for multi-agent workflows
 
 *Reasoning: Multi-step workflows arise naturally once multiple agents exist. File System Agent is the first real agent implementation and handles all local file operations in one place.*
 
