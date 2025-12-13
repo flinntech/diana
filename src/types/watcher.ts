@@ -227,7 +227,7 @@ export const DEFAULT_WATCHED_DIRECTORIES: WatchedDirectory[] = (() => {
 /** Default watcher configuration */
 export const DEFAULT_WATCHER_CONFIG: WatcherConfig = {
   directories: DEFAULT_WATCHED_DIRECTORIES,
-  basePath: '/mnt/c/Users/joshu/Organized',
+  basePath: '/mnt/s/Organized',
   stabilityDelayMs: 3000,
   maxStabilityWaitMs: 60000,
   cooldownHours: 24,

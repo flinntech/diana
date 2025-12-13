@@ -1,13 +1,14 @@
 /**
  * DIANA Configuration
  *
- * Features: 001-obsidian-integration, 002-llm-agent-core, 003-file-watcher-proposals
+ * Features: 001-obsidian-integration, 002-llm-agent-core, 003-file-watcher-proposals, 005-conversation-persistence
  */
 
 import type { ObsidianWriterConfig } from '../types/obsidian.js';
 import type { OllamaConfig, DianaConfig as DianaConfigType } from '../types/agent.js';
 import type { WatcherConfig } from '../types/watcher.js';
 import { DEFAULT_WATCHER_CONFIG } from '../types/watcher.js';
+import type { ConversationStoreConfig } from '../conversations/conversation.types.js';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -69,11 +70,27 @@ export const watcherConfig: WatcherConfig = {
 };
 
 /**
+ * Default conversations configuration
+ * Feature: 005-conversation-persistence
+ */
+export const conversationsConfig: ConversationStoreConfig = {
+  // Storage path for conversations
+  storagePath: process.env.DIANA_CONVERSATIONS_PATH || `${process.env.HOME}/.diana/conversations`,
+
+  // Maximum number of conversations to keep (SC-005)
+  maxConversations: 100,
+
+  // Days to keep conversations before cleanup
+  retentionDays: 30,
+};
+
+/**
  * Full DIANA configuration
- * Extends with LLM agent settings for 002-llm-agent-core and watcher for 003
+ * Extends with LLM agent settings for 002-llm-agent-core, watcher for 003, conversations for 005
  */
 export interface DianaConfig extends DianaConfigType {
   watcher?: WatcherConfig;
+  conversations?: ConversationStoreConfig;
 }
 
 /**
@@ -85,6 +102,7 @@ export const config: DianaConfig = {
   systemPromptPath: path.join(PROJECT_ROOT, 'src/config/system-prompt.md'),
   memoryPath: path.join(obsidianConfig.vaultPath, 'memory/facts.md'),
   watcher: watcherConfig,
+  conversations: conversationsConfig,
 };
 
 /**
@@ -103,6 +121,10 @@ export function createConfig(overrides: Partial<DianaConfig> = {}): DianaConfig 
     watcher: {
       ...watcherConfig,
       ...overrides.watcher,
+    },
+    conversations: {
+      ...conversationsConfig,
+      ...overrides.conversations,
     },
     systemPromptPath: overrides.systemPromptPath ?? config.systemPromptPath,
     memoryPath: overrides.memoryPath ?? config.memoryPath,

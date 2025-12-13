@@ -1,7 +1,7 @@
 /**
  * Chat Command
  *
- * Feature: 002-llm-agent-core
+ * Feature: 002-llm-agent-core, 005-conversation-persistence
  * Date: 2025-12-10
  *
  * Interactive chat session with DIANA.
@@ -9,12 +9,15 @@
 
 import * as readline from 'readline/promises';
 import chalk from 'chalk';
+import { select } from '@inquirer/prompts';
+import { formatDistanceToNow } from 'date-fns';
 import { Session } from '../agent/session.js';
 import { config } from '../config/diana.config.js';
 import type { ChatCommandOptions } from '../types/agent.js';
 import { createProposalService } from '../proposals/index.js';
 import { createWatcherService } from '../watcher/index.js';
 import { ObsidianWriter } from '../obsidian/index.js';
+import { createConversationStore, type IConversationStore } from '../conversations/index.js';
 
 // =============================================================================
 // Constants
@@ -24,7 +27,7 @@ const PROMPT = chalk.cyan('> ');
 const DIANA_PREFIX = chalk.magenta('DIANA: ');
 const THINKING_PREFIX = chalk.dim.italic('💭 ');
 const THINKING_INDICATOR = chalk.dim('💭 thinking...');
-const EXIT_COMMANDS = ['/exit', '/quit', '/q'];
+const EXIT_COMMANDS = ['/exit', '/quit', '/q', '/bye'];
 
 // =============================================================================
 // Thinking Parser
@@ -179,7 +182,7 @@ function printWelcome(toolCount: number): void {
   console.log(chalk.bold.magenta('╚════════════════════════════════════════════╝'));
   console.log('');
   console.log(chalk.dim('Type your message and press Enter to send.'));
-  console.log(chalk.dim('Commands: /exit, /quit, or Ctrl+C to exit.'));
+  console.log(chalk.dim('Commands: /exit, /quit, /bye, or Ctrl+C to exit.'));
   if (toolCount > 0) {
     console.log(chalk.dim(`Tools: ${toolCount} available`));
   }
@@ -196,10 +199,51 @@ function printGoodbye(): void {
 }
 
 /**
+ * Show interactive conversation picker (T019)
+ * Feature: 005-conversation-persistence
+ */
+async function showConversationPicker(store: IConversationStore): Promise<string | null> {
+  const conversations = await store.list();
+
+  if (conversations.length === 0) {
+    console.log(chalk.yellow('\nNo saved conversations found.\n'));
+    return null;
+  }
+
+  // Take the 10 most recent conversations
+  const recentConversations = conversations.slice(0, 10);
+
+  const choices = recentConversations.map((conv) => ({
+    name: `${conv.title} (${formatDistanceToNow(new Date(conv.lastActivity), { addSuffix: true })})`,
+    value: conv.id,
+    description: conv.summary.slice(0, 100) + (conv.summary.length > 100 ? '...' : ''),
+  }));
+
+  // Add option to start new conversation
+  choices.push({
+    name: chalk.dim('Start new conversation'),
+    value: '__new__',
+    description: 'Begin a fresh chat session',
+  });
+
+  try {
+    const selected = await select({
+      message: 'Select a conversation to resume:',
+      choices,
+    });
+
+    return selected === '__new__' ? null : selected;
+  } catch {
+    // User cancelled (Ctrl+C)
+    return null;
+  }
+}
+
+/**
  * Execute the chat command
  */
 export async function chatCommand(options: ChatCommandOptions = {}): Promise<void> {
-  const { debug = false, showThinking = false } = options;
+  const { debug = false, showThinking = false, resume } = options;
 
   // Track if we need to print prefix before next text
   let needsPrefix = true;
@@ -237,6 +281,36 @@ export async function chatCommand(options: ChatCommandOptions = {}): Promise<voi
     proposalService.setObsidianWriter(obsidianWriter);
   }
 
+  // Create conversation store (Feature: 005-conversation-persistence)
+  const conversationStore = config.conversations
+    ? createConversationStore(config.conversations)
+    : undefined;
+
+  // Run automatic cleanup on store initialization (T035)
+  if (conversationStore) {
+    await conversationStore.cleanup();
+  }
+
+  // Handle --resume flag (T018, T020)
+  let resumeConversationId: string | undefined;
+  if (resume && conversationStore) {
+    if (typeof resume === 'string') {
+      // Specific ID provided - verify it exists or find by partial match
+      const conversations = await conversationStore.list();
+      const match = conversations.find(
+        (c) => c.id === resume || c.id.startsWith(resume)
+      );
+      if (match) {
+        resumeConversationId = match.id;
+      } else {
+        console.log(chalk.yellow(`\nConversation "${resume}" not found.\n`));
+      }
+    } else {
+      // No ID - show picker
+      resumeConversationId = await showConversationPicker(conversationStore) ?? undefined;
+    }
+  }
+
   // Create session with tool call handler and services
   // Note: watcher is NOT auto-started here - it runs as a separate systemd service
   const session = new Session(config, {
@@ -244,24 +318,32 @@ export async function chatCommand(options: ChatCommandOptions = {}): Promise<voi
     proposalService,
     watcherService,
     autoStartWatcher: false,
+    conversationStore,
+    resumeConversationId,
   });
 
   // Handle Ctrl+C gracefully
   let isShuttingDown = false;
 
-  const handleSignal = async () => {
+  const handleSignal = () => {
     if (isShuttingDown) {
       process.exit(1);
     }
     isShuttingDown = true;
     console.log('');
-    await session.close();
-    // Shutdown proposal service (Feature: 003)
-    if (proposalService) {
-      await proposalService.shutdown();
-    }
-    printGoodbye();
-    process.exit(0);
+
+    // Use .then() to ensure async work completes before exit
+    session
+      .close()
+      .then(() => (proposalService ? proposalService.shutdown() : undefined))
+      .then(() => {
+        printGoodbye();
+        process.exit(0);
+      })
+      .catch((err) => {
+        console.error('Shutdown error:', err);
+        process.exit(1);
+      });
   };
 
   process.on('SIGINT', handleSignal);
@@ -292,6 +374,28 @@ export async function chatCommand(options: ChatCommandOptions = {}): Promise<voi
     // Print welcome message with tool count
     const toolCount = session.getToolRegistry().size();
     printWelcome(toolCount);
+
+    // Display previous conversation if resuming (Feature: 005)
+    if (resumeConversationId) {
+      const conversation = session.getConversation();
+
+      for (const msg of conversation.messages) {
+        if (msg.role === 'system') continue;
+
+        if (msg.role === 'user') {
+          console.log(chalk.cyan('You: ') + msg.content);
+        } else if (msg.role === 'assistant') {
+          // Remove thinking tags
+          const cleanContent = msg.content
+            .replace(/<think>[\s\S]*?<\/think>/g, '')
+            .trim();
+          if (cleanContent) {
+            console.log(chalk.magenta('DIANA: ') + cleanContent);
+          }
+        }
+        console.log('');
+      }
+    }
 
     // Create readline interface
     const rl = readline.createInterface({

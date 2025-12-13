@@ -1,13 +1,13 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.1.0 → 1.2.0
+Version change: 1.2.0 → 1.3.0
 Modified principles:
-  - Principle IX: Agent-First Design (expanded with sub-principles)
+  - Added Principle X: Transport-Agnostic Services (new)
 Added sections:
-  - Architecture Decisions: Routing layer decision (new)
-  - Architecture Decisions: Task decomposition decision (new)
-  - Code Review Checklist item 7 (new)
+  - Architecture Vision: Near-Term Architecture diagram (new)
+  - Architecture Decisions: Service Layer Design decision #7 (new)
+  - Code Review Checklist item 8 (new)
 Removed sections: None
 Templates requiring updates:
   - .specify/templates/plan-template.md: ✅ Compatible (Constitution Check is generic)
@@ -90,6 +90,22 @@ New capabilities MUST be structured as agent modules with clean interfaces. Agen
 
 **IX.d. Model Agnosticism**: Model selection is an agent implementation detail. The architecture MUST support agents using different LLMs, but the orchestrator and other agents SHOULD NOT know or care which model powers a given agent. This keeps the multi-model option open without requiring it.
 
+### X. Transport-Agnostic Services
+
+Services MUST be designed to work across CLI, HTTP API, and WebSocket interfaces without modification. Business logic MUST be separated from I/O concerns. Methods SHOULD return structured data rather than performing output directly. Services MUST emit events for state changes to enable real-time subscriptions.
+
+**Rationale**: DIANA will eventually have a web dashboard for proposal approval, activity monitoring, and agent management. Designing services for transport independence now prevents costly refactoring later.
+
+**Sub-principles**:
+
+**X.a. Return Data Over Side Effects**: Public service methods MUST return structured results (objects, arrays, status codes) rather than printing to console, logging success, or performing I/O as their primary function. Logging and I/O are separate concerns handled by callers or decorators.
+
+**X.b. Event-Driven State Changes**: Services that manage state MUST emit events when state changes (e.g., `proposal:created`, `file:analyzed`). This enables real-time updates via WebSocket/SSE without polling.
+
+**X.c. Dependency Injection**: Services SHOULD receive dependencies (config, other services, I/O adapters) via constructor or factory, not import globals. This enables testing and alternative transports.
+
+**X.d. API-Friendly Signatures**: Public methods SHOULD have signatures suitable for REST/GraphQL exposure: accept plain objects/primitives as parameters, return serializable data, throw typed errors with codes.
+
 ## Architecture Vision
 
 ### Current Architecture (Monolith)
@@ -98,6 +114,30 @@ New capabilities MUST be structured as agent modules with clean interfaces. Agen
 CLI → Session → Ollama
          ↓
     Tool Registry → Tools (all in-process)
+```
+
+### Near-Term Architecture (API + Dashboard)
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Presentation Layer                    │
+├──────────────┬──────────────────┬───────────────────────┤
+│     CLI      │    REST API      │   WebSocket/SSE       │
+│  (commander) │ (Express/Fastify)│   (real-time)         │
+└──────┬───────┴────────┬─────────┴───────────┬───────────┘
+       │                │                     │
+       └────────────────┼─────────────────────┘
+                        ▼
+┌─────────────────────────────────────────────────────────┐
+│                    Service Layer                         │
+│  ProposalService │ Session │ WatcherService │ Orchestrator
+│     (events)     │ (chat)  │   (events)     │  (tools)   │
+└─────────────────────────────────────────────────────────┘
+                        │
+┌─────────────────────────────────────────────────────────┐
+│                    External I/O                          │
+│   OllamaClient  │  ObsidianWriter  │  File System        │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ### Target Architecture (Multi-Agent Microservices)
@@ -161,6 +201,13 @@ CLI → Session → Ollama
    - Orchestrator pauses for user approval before executing write steps
    - This ensures users approve with full knowledge of what will be affected
 
+7. **Service Layer Design**: Transport-agnostic from day one
+   - Services own business logic and state management
+   - Presentation layer (CLI, API, WebSocket) calls services
+   - Services emit events; presentation layer subscribes and forwards
+   - No console.log or readline in service layer code
+   - Enables adding HTTP API without refactoring core services
+
 ## Technology Stack
 
 **Current Technologies**:
@@ -199,6 +246,7 @@ CLI → Session → Ollama
 5. Is this structured as an agent module with clean interface?
 6. Does it use MCP for tool exposure where applicable?
 7. For multi-step workflows, is approval requested after context-gathering but before destructive operations?
+8. Are service methods transport-agnostic (return data, emit events, no direct I/O)?
 
 ## Governance
 
@@ -213,4 +261,4 @@ All code changes MUST verify compliance with these principles. Complexity or pri
 See `CLAUDE.md` for runtime development guidance.
 See `docs/CAPABILITY_ROADMAP.md` for build order and architecture details.
 
-**Version**: 1.2.0 | **Ratified**: 2025-12-10 | **Last Amended**: 2025-12-12
+**Version**: 1.3.0 | **Ratified**: 2025-12-10 | **Last Amended**: 2025-12-13

@@ -4,7 +4,7 @@
 
 **Created**: 2025-12-13
 
-**Status**: Draft
+**Status**: Implemented
 
 **Input**: Enable DIANA to save and resume conversations across sessions with local JSON storage, CLI commands, and automatic cleanup.
 
@@ -20,7 +20,7 @@ A user was discussing a complex file organization strategy with DIANA yesterday.
 
 **Acceptance Scenarios**:
 
-1. **Given** a user has a previous conversation saved, **When** they run `diana chat --resume <conversation-id>`, **Then** the session loads with all previous messages visible and DIANA responds with awareness of prior context.
+1. **Given** a user has a previous conversation saved, **When** they run `diana chat --resume <conversation-id>`, **Then** the session loads and displays all previous messages on screen (user messages prefixed with "You:", assistant messages prefixed with "DIANA:") so the user has full context before continuing.
 2. **Given** a user runs `diana chat --resume` without an ID, **When** they have previous conversations, **Then** an interactive picker displays the last 10 conversations with titles and timestamps.
 3. **Given** a user provides an invalid conversation ID, **When** attempting to resume, **Then** the system displays a clear error message.
 4. **Given** a conversation is already open in another session, **When** a user attempts to resume it, **Then** the system displays a message indicating the conversation is locked and by which process.
@@ -96,7 +96,7 @@ Storage should not grow indefinitely. Old conversations should be automatically 
 - What happens when disk is full? Save operation fails gracefully with error message, session continues.
 - What happens when two sessions try to save simultaneously? Atomic writes prevent corruption; last write wins.
 - What happens when conversation file exists but index is missing entry? Orphan files are ignored; index is authoritative.
-- What happens when resuming a conversation that was partially corrupted? System loads what it can and warns about missing data.
+- What happens when resuming a conversation that was partially corrupted? System attempts JSON parse; if it fails entirely, treats as missing conversation with error message. Partial message recovery is out of scope (JSON is atomic - valid or invalid).
 - What happens when another process has a conversation open? System refuses to load, showing which process holds the lock.
 - What happens when a process crashes without releasing the lock? Stale locks (process no longer running) are automatically released.
 - What happens when LLM title generation fails? System falls back to timestamp-based title (e.g., "Conversation from Dec 13, 2025").
@@ -105,17 +105,18 @@ Storage should not grow indefinitely. Old conversations should be automatically 
 
 ### Functional Requirements
 
-- **FR-001**: System MUST automatically save conversations when a chat session ends normally or via interrupt.
+- **FR-001**: System MUST automatically save conversations when a chat session ends normally or via interrupt, provided the conversation contains at least one complete exchange (user message + assistant response).
 - **FR-002**: System MUST allow resuming a previous conversation by providing its ID.
 - **FR-003**: System MUST display an interactive picker of recent conversations when `--resume` is used without an ID.
 - **FR-004**: System MUST generate unique conversation IDs for new sessions.
-- **FR-005**: System MUST generate conversation titles using the LLM at save time, reflecting the overall conversation content (not just the first message).
+- **FR-005**: System MUST generate (or regenerate) conversation titles and summaries using the LLM on every save, reflecting the full conversation content.
 - **FR-006**: System MUST store conversations in human-readable JSON format.
 - **FR-007**: System MUST use atomic file writes to prevent corruption during save operations.
 - **FR-008**: System MUST separate metadata (index) from full conversation data for efficient listing.
 - **FR-009**: System MUST serialize all message types including tool calls and responses.
 - **FR-010**: System MUST preserve existing chat command behavior when no `--resume` flag is provided.
-- **FR-011**: System MUST list conversations showing ID, title, summary, timestamps, and message count.
+- **FR-010a**: System MUST display all previous messages on screen when resuming a conversation, with thinking tags (`<think>...</think>`) stripped from assistant responses for readability.
+- **FR-011**: System MUST list conversations showing ID, title, summary, timestamps, and message count, sorted by last activity (most recent first).
 - **FR-012**: System MUST allow previewing conversation content without loading into active session.
 - **FR-013**: System MUST allow deleting individual conversations.
 - **FR-014**: System MUST automatically prune conversations exceeding the configured maximum count.
@@ -147,6 +148,14 @@ Storage should not grow indefinitely. Old conversations should be automatically 
 - **SC-005**: Users can list, preview, and manage at least 100 conversations without performance degradation.
 - **SC-006**: All stored data remains readable by humans using standard text editors.
 - **SC-007**: Storage cleanup maintains data under configured limits automatically without user intervention.
+
+## Clarifications
+
+### Session 2025-12-13
+
+- Q: Should empty/minimal conversations be saved? → A: Only save conversations with at least 1 complete exchange (user message + assistant response).
+- Q: Should title/summary update when resumed conversations are saved? → A: Regenerate title and summary on every save to reflect full conversation content.
+- Q: How should conversation list be sorted? → A: By last activity (most recent first).
 
 ## Assumptions
 
