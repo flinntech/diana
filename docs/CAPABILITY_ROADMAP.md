@@ -38,7 +38,7 @@ Building toward JARVIS - a truly useful AI assistant.
 | Reminders/alarms       | 8     | 2      | 4.0   | node-cron + notifications                |
 | **System Control**     |       |        |       |                                          |
 | Run shell commands     | 9     | 2      | 4.5   | Powerful but dangerous                   |
-| File System Agent      | 7     | 1      | 7.0   | CRUD + watch mode, refactors watcher     |
+| File System Agent      | 8     | 2      | 4.0   | Unified file expert: search + CRUD + watch + compound ops |
 | App launching          | 5     | 2      | 2.5   | OS-specific                              |
 | Clipboard access       | 6     | 2      | 3.0   | WSL→Windows bridge via clip.exe/PS       |
 | **Communication**      |       |        |       |                                          |
@@ -69,10 +69,10 @@ Building toward JARVIS - a truly useful AI assistant.
 ### Phase 0: Architecture Foundation
 
 1. **Agent + MCP foundation** - Agent interface + MCP client pattern
-2. **File System Agent** (7.0) - CRUD + watch mode for organization
+2. **File System Agent** (4.0) - Unified file expert: content search (Windows Index + WSL), CRUD, watch mode, compound ops like "find and organize"
 3. **Task Breakdown Agent** (2.67) - Planning/decomposition for multi-agent workflows
 
-*Reasoning: Multi-step workflows arise naturally once multiple agents exist. Decomposition capability should be in place early rather than bolted on later.*
+*Reasoning: Multi-step workflows arise naturally once multiple agents exist. File System Agent is the first real agent implementation and handles all local file operations in one place.*
 
 ### Phase 1: Quick Wins (Score 5.0+)
 
@@ -111,7 +111,6 @@ Building toward JARVIS - a truly useful AI assistant.
 
 ## Quick Wins (Low effort, decent value)
 
-- File System Agent (Effort: 1) - watcher refactored + CRUD
 - Wikipedia lookup (Effort: 1)
 - Current weather (Effort: 1)
 - System info (Effort: 1)
@@ -139,10 +138,10 @@ CLI → Session → Ollama
         ┌────────────────────┼────────────────────┐
         ▼                    ▼                    ▼
 ┌───────────────┐  ┌───────────────┐  ┌───────────────┐
-│  Web Agent    │  │ Productivity  │  │ System Agent  │
-│ (search/fetch)│  │    Agent      │  │ (shell/files) │
-└───────────────┘  │ (Reclaim.ai)  │  └───────────────┘
-                   └───────────────┘
+│  Web Agent    │  │ Productivity  │  │ File System   │
+│ (search/fetch)│  │    Agent      │  │    Agent      │
+└───────────────┘  │ (Reclaim.ai)  │  │(search/CRUD)  │
+                   └───────────────┘  └───────────────┘
         ┌────────────────────┼────────────────────┐
         ▼                    ▼                    ▼
 ┌───────────────┐  ┌───────────────┐  ┌───────────────┐
