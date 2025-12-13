@@ -28,6 +28,8 @@ import { registerProposalTools, registerWatcherTools } from './tools/watcher.js'
 import { ObsidianWriter } from '../obsidian/writer.js';
 import type { ProposalService } from '../proposals/index.js';
 import type { WatcherService } from '../watcher/index.js';
+import type { IOrchestrator } from './types/orchestrator.js';
+import { LegacyToolAgent } from './legacy-tool-agent.js';
 
 // =============================================================================
 // Constants
@@ -104,6 +106,10 @@ export interface SessionOptions {
   watcherService?: WatcherService;
   /** Auto-start watcher on initialization (default: true if watcherService provided) */
   autoStartWatcher?: boolean;
+  /** Orchestrator for agent-based tool execution (Feature: 004) */
+  orchestrator?: IOrchestrator;
+  /** Load MCP servers from config on initialization (default: true if orchestrator provided) */
+  loadMCPServers?: boolean;
 }
 
 // =============================================================================
@@ -127,6 +133,8 @@ export class Session implements ISession {
   private readonly skipDefaultTools: boolean;
   private readonly watcherService?: WatcherService;
   private readonly autoStartWatcher: boolean;
+  private readonly orchestrator?: IOrchestrator;
+  private readonly loadMCPServers: boolean;
 
   constructor(config: DianaConfig, options: SessionOptions = {}) {
     this.config = config;
@@ -140,6 +148,8 @@ export class Session implements ISession {
     this.skipDefaultTools = options.skipDefaultTools ?? false;
     this.watcherService = options.watcherService;
     this.autoStartWatcher = options.autoStartWatcher ?? (!!options.watcherService);
+    this.orchestrator = options.orchestrator;
+    this.loadMCPServers = options.loadMCPServers ?? (!!options.orchestrator);
 
     // Initialize tool registry
     this.toolRegistry = options.toolRegistry ?? new ToolRegistry();
@@ -218,9 +228,26 @@ export class Session implements ISession {
         registerMemoryTools(this.toolRegistry, this.keyFactStore);
       }
 
+      // Setup orchestrator with legacy tools (Feature: 004)
+      if (this.orchestrator) {
+        // Wrap the tool registry as a LegacyToolAgent and register with orchestrator
+        const legacyAgent = new LegacyToolAgent(this.toolRegistry);
+        this.orchestrator.registerAgentFactory('legacy-tools', () => legacyAgent);
+
+        // Load MCP servers from config if enabled
+        if (this.loadMCPServers) {
+          await this.orchestrator.loadMCPServers();
+        }
+      }
+
       // Create conversation with system prompt (including tool descriptions, key facts, and current context)
+      // When orchestrator is available, get tools from it; otherwise use registry directly
+      const toolDescriptions = this.orchestrator
+        ? this.getOrchestratorToolDescriptions()
+        : this.toolRegistry.getDescriptions();
+
       const systemPrompt = this.promptLoader.getPrompt({
-        TOOL_DESCRIPTIONS: this.toolRegistry.getDescriptions(),
+        TOOL_DESCRIPTIONS: toolDescriptions,
         KEY_FACTS: this.keyFactStore.getContextString(),
         CURRENT_CONTEXT: generateCurrentContext(),
       });
@@ -273,8 +300,8 @@ export class Session implements ISession {
       while (iterations < MAX_TOOL_ITERATIONS) {
         iterations++;
 
-        // Prepare request with tools
-        const tools = this.toolRegistry.getToolDefinitions();
+        // Prepare request with tools (from orchestrator if available)
+        const tools = this.getToolDefinitions();
         const request = {
           model: this.config.ollama.model,
           messages: this.conversation.getMessages(),
@@ -350,7 +377,8 @@ export class Session implements ISession {
             this.onToolCall(toolCall.function.name, args);
           }
 
-          const result = await this.toolRegistry.execute(
+          // Execute through orchestrator if available, otherwise use registry directly
+          const result = await this.executeToolCall(
             toolCall.function.name,
             args
           );
@@ -566,6 +594,57 @@ export class Session implements ISession {
       activity,
       title: 'DIANA Conversation',
     });
+  }
+
+  /**
+   * Get tool descriptions from orchestrator (Feature: 004)
+   * Converts Ollama tool definitions to markdown descriptions
+   */
+  private getOrchestratorToolDescriptions(): string {
+    if (!this.orchestrator) {
+      return this.toolRegistry.getDescriptions();
+    }
+
+    const tools = this.orchestrator.getAllToolDefinitions();
+    if (tools.length === 0) {
+      return 'No tools available.';
+    }
+
+    return tools
+      .map((tool) => {
+        const params = Object.entries(tool.function.parameters.properties || {})
+          .map(([name, prop]) => {
+            const typedProp = prop as { type: string; description?: string };
+            return `  - ${name} (${typedProp.type}): ${typedProp.description || 'No description'}`;
+          })
+          .join('\n');
+
+        return `### ${tool.function.name}\n${tool.function.description}\n\n**Parameters:**\n${params || '  None'}`;
+      })
+      .join('\n\n');
+  }
+
+  /**
+   * Execute a tool, routing through orchestrator if available (Feature: 004)
+   */
+  private async executeToolCall(
+    toolName: string,
+    args: Record<string, unknown>
+  ): Promise<import('../types/agent.js').ToolResult> {
+    if (this.orchestrator) {
+      return this.orchestrator.execute(toolName, args);
+    }
+    return this.toolRegistry.execute(toolName, args);
+  }
+
+  /**
+   * Get tool definitions for LLM, from orchestrator if available (Feature: 004)
+   */
+  private getToolDefinitions(): import('../types/agent.js').OllamaToolDefinition[] {
+    if (this.orchestrator) {
+      return this.orchestrator.getAllToolDefinitions();
+    }
+    return this.toolRegistry.getToolDefinitions();
   }
 }
 

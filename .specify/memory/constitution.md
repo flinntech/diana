@@ -1,12 +1,13 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.0.0 → 1.1.0
-Modified principles: None renamed
+Version change: 1.1.0 → 1.2.0
+Modified principles:
+  - Principle IX: Agent-First Design (expanded with sub-principles)
 Added sections:
-  - Principle IX: Agent-First Design (new)
-  - Architecture Vision (new section with current/future diagrams)
-  - Technology Stack updated with future architecture elements
+  - Architecture Decisions: Routing layer decision (new)
+  - Architecture Decisions: Task decomposition decision (new)
+  - Code Review Checklist item 7 (new)
 Removed sections: None
 Templates requiring updates:
   - .specify/templates/plan-template.md: ✅ Compatible (Constitution Check is generic)
@@ -73,6 +74,22 @@ New capabilities MUST be structured as agent modules with clean interfaces. Agen
 
 **Rationale**: DIANA will grow into a multi-agent system. Designing for separation now prevents painful refactoring later and enables tool reuse across LLM applications.
 
+**Sub-principles**:
+
+**IX.a. Agent/LLM Separation**: Agents are application code that own state, tool filtering, policies, and lifecycle management. The LLM is a stateless reasoning service that agents invoke when they need intelligence applied to a task. The LLM has no knowledge of agents—it only sees whatever context an agent (or the orchestrator) puts in the prompt.
+
+**IX.b. Agent Manifest**: Every agent MUST provide a manifest containing:
+- `id`: Unique identifier (e.g., `web-agent`, `system-agent`)
+- `name`: Human-readable display name
+- `tools`: Filtered list of tools this agent exposes
+- `capabilities`: Array of routing hints (e.g., `["web-search", "url-fetch"]`)
+- `requiresApproval`: Boolean indicating if operations need user approval
+- `modelRequirements` (optional): For future multi-model support
+
+**IX.c. Tool Filtering**: Multiple agents MAY share a single MCP connection while exposing different filtered subsets of tools. This enables separation of concerns (read vs write), distinct approval policies, and context efficiency without duplicating resources.
+
+**IX.d. Model Agnosticism**: Model selection is an agent implementation detail. The architecture MUST support agents using different LLMs, but the orchestrator and other agents SHOULD NOT know or care which model powers a given agent. This keeps the multi-model option open without requiring it.
+
 ## Architecture Vision
 
 ### Current Architecture (Monolith)
@@ -131,6 +148,19 @@ CLI → Session → Ollama
    - Each agent can expose capabilities as MCP server
    - Leverage existing MCP ecosystem (filesystem, git, etc.)
 
+5. **Routing Layer**: Lightweight routing before execution
+   - Orchestrator uses a routing step before selecting an agent
+   - Routing context contains agent summaries derived from manifests (not full tool definitions)
+   - Keeps token usage minimal during routing decisions
+   - Only after routing does the orchestrator load the selected agent's full tool set for execution
+
+6. **Task Decomposition**: Planning step for complex queries
+   - Complex queries spanning multiple agents are handled by a planning step
+   - The orchestrator (or a dedicated Task Breakdown Agent) decomposes the user's request into a sequence of steps, each routable to a single agent
+   - For plans involving write operations, the orchestrator executes read steps to gather context first
+   - Orchestrator pauses for user approval before executing write steps
+   - This ensures users approve with full knowledge of what will be affected
+
 ## Technology Stack
 
 **Current Technologies**:
@@ -168,6 +198,7 @@ CLI → Session → Ollama
 4. Does it degrade gracefully on dependency failure?
 5. Is this structured as an agent module with clean interface?
 6. Does it use MCP for tool exposure where applicable?
+7. For multi-step workflows, is approval requested after context-gathering but before destructive operations?
 
 ## Governance
 
@@ -182,4 +213,4 @@ All code changes MUST verify compliance with these principles. Complexity or pri
 See `CLAUDE.md` for runtime development guidance.
 See `docs/CAPABILITY_ROADMAP.md` for build order and architecture details.
 
-**Version**: 1.1.0 | **Ratified**: 2025-12-10 | **Last Amended**: 2025-12-11
+**Version**: 1.2.0 | **Ratified**: 2025-12-10 | **Last Amended**: 2025-12-12

@@ -75,7 +75,7 @@ Administrators can start, stop, and check the health of agents. This enables ope
 - What happens when an MCP server connection times out during tool execution? The orchestrator returns a timeout error to the caller and logs the failure for diagnostics.
 - How does the system handle an agent that hangs during execution? The orchestrator enforces a configurable timeout per tool execution and terminates hung requests.
 - What happens when two agents register tools with the same name? The orchestrator rejects the duplicate registration and logs a warning.
-- How does the system handle rapid sequential requests to the same agent? Requests are queued and processed in order; the agent handles one request at a time unless it explicitly supports concurrency.
+- How does the system handle rapid sequential requests to the same agent? Requests are dispatched immediately via async Promises; natural Promise ordering provides sequencing. No explicit queue for V1 (per clarification Q58). Agents may process concurrently unless they implement internal serialization.
 
 ## Requirements *(mandatory)*
 
@@ -105,7 +105,7 @@ Administrators can start, stop, and check the health of agents. This enables ope
 - **Tool**: A discrete operation an agent can perform. Has a name, description, input parameters schema (JSON Schema format for MCP compatibility), and output type.
 - **Orchestrator**: The central coordinator that maintains the agent registry, routes requests, and manages agent lifecycles.
 - **MCP Server**: An external service that provides tools via the Model Context Protocol. The system connects as an MCP client.
-- **Agent Registry**: A collection of registered agents and their associated tools, maintained by the orchestrator.
+- **Agent Registry**: The orchestrator's internal collection of registered agents and their associated tools. Accessed via orchestrator methods, not directly.
 
 ## Success Criteria *(mandatory)*
 
@@ -142,7 +142,7 @@ Administrators can start, stop, and check the health of agents. This enables ope
 - Q: Which interfaces are stable vs. internal? → A: Minimal stable surface - only `Agent` interface and `ToolResult` type are stable; orchestrator internals and registry methods may change (early development flexibility).
 - Q: Which MCP protocol version should be targeted? → A: Latest stable MCP spec at implementation time; document version in config/comments.
 - Q: How should existing tools be wrapped as agents? → A: Facade pattern - `LegacyToolAgent` adapter wraps any `(params) => Promise<result>` function to Agent interface; transitional until tools are replaced by future features.
-- Q: How are MCP servers configured? → A: Config file - `config/mcp-servers.json` array of `{name, url, timeout?, auth?}` entries; timeout defaults to 10s; auth optional for local servers.
+- Q: How are MCP servers configured? → A: Config file - `config/mcp-servers.json` array of `{name, command, args[], env?, timeout?, autoStart?}` entries; uses stdio transport for local servers per research.md; timeout defaults to 10000ms; autoStart defaults to true.
 - Q: How does the agent system integrate with the file watcher? → A: No integration - file watcher remains independent; agent system is additive. FR-013 requires no breakage, not integration.
 - Q: How does the chat system integrate with the agent system? → A: Chat routes tool calls through orchestrator - Session class calls `orchestrator.execute()` instead of direct tool registry; unified access to all tools (legacy + MCP).
 - Q: What retry behavior applies to MCP server failures? → A: Simple retry - 1 retry with 3s delay for connection/timeout errors only; fail immediately for other errors.
