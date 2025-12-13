@@ -19,6 +19,8 @@ Building toward JARVIS - a truly useful AI assistant.
 - [x] Date/time awareness
 - [x] Warm personality
 - [x] Agent + MCP foundation [004]
+- [x] Conversation persistence [005]
+- [x] Obsidian rich linking [006]
 
 ---
 
@@ -56,8 +58,8 @@ Building toward JARVIS - a truly useful AI assistant.
 | Code execution         | 7     | 3      | 2.33  | Sandboxed Python/JS                                                      |
 | **Architecture**       |       |        |       |                                                                          |
 | Agent + MCP foundation | 8     | 3      | 2.67  | ✅ Done - Agent interface + MCP client pattern [004]                     |
-| Conversation persist.  | 9     | 1      | 9.0   | Save/resume conversations, list history [005]                            |
-| Obsidian Rich Linking  | 7     | 2      | 3.5   | Wikilinks, backlinks, knowledge graph [006]                              |
+| Conversation persist.  | 9     | 1      | 9.0   | ✅ Done - Save/resume conversations, list history [005]                  |
+| Obsidian Rich Linking  | 7     | 2      | 3.5   | ✅ Done - Wikilinks, backlinks, knowledge graph [006]                    |
 | Obsidian MCP migration | 6     | 2      | 3.0   | Move logging to external MCP server [024]                                |
 | Multi-step planning    | 8     | 3      | 2.67  | Single-agent ReAct loops, task breakdown [017]                           |
 | Multi-agent system     | 8     | 4      | 2.0   | Orchestrator + specialized agents                                        |
@@ -72,8 +74,8 @@ Building toward JARVIS - a truly useful AI assistant.
 ### Phase 0: Architecture Foundation
 
 1. **[004] Agent + MCP foundation** ✅ - Agent interface + MCP client pattern
-2. **[005] Conversation Persistence** (9.0) - Save and resume conversations across sessions
-3. **[006] Obsidian Rich Linking** - Wikilinks, backlinks, and knowledge graph for daily logs
+2. **[005] Conversation Persistence** ✅ - Save and resume conversations across sessions
+3. **[006] Obsidian Rich Linking** ✅ - Wikilinks, backlinks, and knowledge graph for daily logs
 4. **[007] File System Agent** (4.0) - Unified file expert: content search (Windows Index + WSL), CRUD, watch mode, compound ops like "find and organize"
 
 *Reasoning: Multi-step workflows arise naturally once multiple agents exist. File System Agent is the first real agent implementation and handles all local file operations in one place.*
