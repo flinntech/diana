@@ -455,6 +455,7 @@ export interface StatusResult {
 
 /** Error codes for LLM agent */
 export type AgentErrorCode =
+  // Core LLM errors
   | 'OLLAMA_UNAVAILABLE'
   | 'MODEL_NOT_FOUND'
   | 'SYSTEM_PROMPT_MISSING'
@@ -462,7 +463,17 @@ export type AgentErrorCode =
   | 'TOOL_EXECUTION_FAILED'
   | 'CONTEXT_OVERFLOW'
   | 'NETWORK_TIMEOUT'
-  | 'INVALID_RESPONSE';
+  | 'INVALID_RESPONSE'
+  // Agent system errors (004-agent-mcp-foundation)
+  | 'AGENT_INIT_FAILED'
+  | 'AGENT_SHUTDOWN_FAILED'
+  | 'AGENT_NOT_FOUND'
+  | 'AGENT_UNAVAILABLE'
+  | 'TOOL_EXECUTION_TIMEOUT'
+  // MCP errors (004-agent-mcp-foundation)
+  | 'MCP_CONNECTION_FAILED'
+  | 'MCP_TOOL_DISCOVERY_FAILED'
+  | 'MCP_SERVER_UNAVAILABLE';
 
 /** Agent error that extends Error for proper error handling */
 export class AgentError extends Error {

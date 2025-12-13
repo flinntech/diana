@@ -52,10 +52,11 @@ Building toward JARVIS - a truly useful AI assistant.
 | LLM delegation         | 5     | 2      | 2.5   | Claude for complex, Gemini for research  |
 | Proactive suggestions  | 10    | 4      | 2.5   | Pattern recognition, context             |
 | Learning preferences   | 7     | 3      | 2.33  | Expand key facts system                  |
-| Multi-step planning    | 8     | 3      | 2.67  | Agent loops, ReAct pattern               |
+| Multi-step planning    | 8     | 3      | 2.67  | Single-agent ReAct loops within domain   |
 | Code execution         | 7     | 3      | 2.33  | Sandboxed Python/JS                      |
 | **Architecture**       |       |        |       |                                          |
 | Plugin architecture    | 8     | 3      | 2.67  | MCP servers + Agent interface            |
+| Task Breakdown Agent   | 8     | 3      | 2.67  | Planning/decomposition for multi-agent workflows, approval orchestration |
 | Multi-agent system     | 8     | 4      | 2.0   | Orchestrator + specialized agents        |
 | Service communication  | 7     | 3      | 2.33  | HTTP REST + Redis pub/sub                |
 
@@ -69,39 +70,42 @@ Building toward JARVIS - a truly useful AI assistant.
 
 1. **Agent + MCP foundation** - Agent interface + MCP client pattern
 2. **File System Agent** (7.0) - CRUD + watch mode for organization
+3. **Task Breakdown Agent** (2.67) - Planning/decomposition for multi-agent workflows
+
+*Reasoning: Multi-step workflows arise naturally once multiple agents exist. Decomposition capability should be in place early rather than bolted on later.*
 
 ### Phase 1: Quick Wins (Score 5.0+)
 
-3. **Wikipedia lookup** (5.0) - Simple knowledge queries
-4. **Reclaim.ai integration** (5.0) - Tasks + calendar in one
+4. **Wikipedia lookup** (5.0) - Simple knowledge queries
+5. **Reclaim.ai integration** (5.0) - Tasks + calendar in one
 
 ### Phase 2: Core Tools (Score 4.0-4.5)
 
-5. **Shell commands** (4.5) - With approval flow
-6. **Gmail (personal)** (4.0) - Personal email, MCP server ready
-7. **Web search + page reading** (4.0) - External knowledge
-8. **Notion integration** (4.0) - Access project notes
-9. **Reminders/alarms** (4.0) - Time-based triggers
+6. **Shell commands** (4.5) - With approval flow
+7. **Gmail (personal)** (4.0) - Personal email, MCP server ready
+8. **Web search + page reading** (4.0) - External knowledge
+9. **Notion integration** (4.0) - Access project notes
+10. **Reminders/alarms** (4.0) - Time-based triggers
 
 ### Phase 3: System & Email (Score 3.0-3.5)
 
-10. **Outlook (work)** (3.5) - Work email, MCP server ready
-11. **Clipboard access** (3.0) - WSL→Windows bridge
+11. **Outlook (work)** (3.5) - Work email, MCP server ready
+12. **Clipboard access** (3.0) - WSL→Windows bridge
 
 ### Phase 4: Intelligence (Score 2.67)
 
-12. **Multi-step planning** (2.67) - Agent loops, ReAct
+13. **Multi-step planning** (2.67) - Single-agent ReAct loops within domain
 
 ### Phase 5: Advanced Capabilities (Score ≤ 2.5)
 
-13. **Proactive suggestions** (2.5) - "You have a meeting in 30min"
-14. **LLM delegation** (2.5) - Claude for complex, Gemini for research
-15. **RAG over local files** (2.25) - Internal knowledge base
-16. **Home Assistant** (2.33) - Smart home control
-17. **Learning preferences** (2.33) - Personalization
-18. **Voice output (TTS)** (2.0) - Spoken responses
-19. **Obsidian MCP migration** - Move logging to external MCP server
-20. **Voice input (STT)** (1.33) - Hands-free queries
+14. **Proactive suggestions** (2.5) - "You have a meeting in 30min"
+15. **LLM delegation** (2.5) - Claude for complex, Gemini for research
+16. **RAG over local files** (2.25) - Internal knowledge base
+17. **Home Assistant** (2.33) - Smart home control
+18. **Learning preferences** (2.33) - Personalization
+19. **Voice output (TTS)** (2.0) - Spoken responses
+20. **Obsidian MCP migration** - Move logging to external MCP server
+21. **Voice input (STT)** (1.33) - Hands-free queries
 
 ---
 
@@ -172,3 +176,73 @@ CLI → Session → Ollama
    - Enables tool reuse across different LLM applications
    - Each agent can expose its capabilities as MCP server
    - Leverage existing MCP ecosystem (filesystem, git, etc.)
+
+### Routing and Execution Flow
+
+When a query arrives, the orchestrator performs a **routing step** before execution. Routing context contains lightweight agent summaries derived from manifests—not full tool definitions. This keeps token usage minimal regardless of how many agents or tools exist in the system.
+
+```
+User Query
+    │
+    ▼
+┌─────────────────────────────────────────┐
+│           Routing Step                  │
+│  (agent summaries from manifests only)  │
+└────────────────┬────────────────────────┘
+                 │
+                 ▼
+         Selected Agent
+                 │
+                 ▼
+┌─────────────────────────────────────────┐
+│          Execution Step                 │
+│   (load full tool set for this agent)   │
+└─────────────────────────────────────────┘
+```
+
+The LLM never sees all tools from all agents simultaneously. This prevents context bloat and keeps routing decisions fast and focused.
+
+### Task Breakdown Agent
+
+For complex queries that span agent boundaries (like "update firmware on all non-compliant devices"), the orchestrator invokes **planning logic** to decompose the request into discrete steps. Each step routes to a single agent.
+
+The Task Breakdown Agent (or planning logic within the orchestrator) produces a structured plan:
+
+1. **Decomposition**: Break query into single-agent steps
+2. **Read Phase**: Execute read operations to gather context
+3. **Approval Gate**: Pause for user approval with full context
+4. **Write Phase**: Execute write operations only after approval
+
+```
+Complex Query: "Update firmware on non-compliant devices"
+    │
+    ▼
+┌─────────────────────────────────────────┐
+│         Task Breakdown Agent            │
+└────────────────┬────────────────────────┘
+                 │
+                 ▼
+    Step 1: [System Agent] List all devices
+    Step 2: [System Agent] Check compliance status
+    Step 3: [System Agent] Identify non-compliant  ← Read phase ends
+    ─────────────────────────────────────────────
+    >>> APPROVAL GATE: "Found 3 devices. Proceed?"
+    ─────────────────────────────────────────────
+    Step 4: [System Agent] Update device A firmware  ← Write phase
+    Step 5: [System Agent] Update device B firmware
+    Step 6: [System Agent] Update device C firmware
+```
+
+This agent sits alongside the orchestrator conceptually—it's the "how do we break this down" brain before routing happens. It ensures users approve with full knowledge of what will be affected.
+
+### Multi-Model Future
+
+The architecture assumes all agents initially use the same generalist LLM (`qwen3:30b-a3b`). However, each agent encapsulates its own LLM client, allowing future specialization.
+
+**Evolution path**:
+1. **Baseline**: All agents use the generalist model
+2. **Instrumentation**: Track per-agent tool selection accuracy and parameter formatting
+3. **Identification**: Agents with inconsistent results become candidates for specialist models
+4. **Specialization**: Swap in fine-tuned models for specific agents
+
+The manifest's optional `modelRequirements` field supports this evolution without architectural changes. The orchestrator and other agents don't know or care which model powers a given agent—model selection is an agent implementation detail.
