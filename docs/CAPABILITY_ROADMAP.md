@@ -18,6 +18,7 @@ Building toward JARVIS - a truly useful AI assistant.
 - [x] File watcher with organization proposals
 - [x] Date/time awareness
 - [x] Warm personality
+- [x] Agent + MCP foundation [004]
 
 ---
 
@@ -26,38 +27,39 @@ Building toward JARVIS - a truly useful AI assistant.
 | Capability             | Value | Effort | Score | Notes                                                                    |
 | ---------------------- | ----- | ------ | ----- | ------------------------------------------------------------------------ |
 | **Information Access** |       |        |       |                                                                          |
-| Web search             | 8     | 2      | 4.0   | SerpAPI ready, needs page reading                                        |
-| Read web pages         | 8     | 2      | 4.0   | Readability.js, pairs with search                                        |
-| RAG over local files   | 9     | 4      | 2.25  | ChromaDB exists, needs integration                                       |
-| Wikipedia lookup       | 5     | 1      | 5.0   | Simple API, quick win                                                    |
+| Web search             | 8     | 2      | 4.0   | SerpAPI ready, needs page reading [012]                                  |
+| Read web pages         | 8     | 2      | 4.0   | Readability.js, pairs with search [012]                                  |
+| RAG over local files   | 9     | 4      | 2.25  | ChromaDB exists, needs integration [020]                                 |
+| Wikipedia lookup       | 5     | 1      | 5.0   | Simple API, quick win [008]                                              |
 | **Productivity**       |       |        |       |                                                                          |
-| Reclaim.ai integration | 10    | 2      | 5.0   | Tasks + calendar in one, REST API exists                                 |
-| Notion integration     | 8     | 2      | 4.0   | Project notes, MCP server exists                                         |
-| Gmail (personal)       | 8     | 2      | 4.0   | MCP server exists, OAuth2 ready                                          |
-| Outlook (work)         | 7     | 2      | 3.5   | MCP server running locally                                               |
-| Reminders/alarms       | 8     | 2      | 4.0   | node-cron + notifications                                                |
+| Reclaim.ai integration | 10    | 2      | 5.0   | Tasks + calendar in one, REST API exists [009]                           |
+| Notion integration     | 8     | 2      | 4.0   | Project notes, MCP server exists [013]                                   |
+| Gmail (personal)       | 8     | 2      | 4.0   | MCP server exists, OAuth2 ready [011]                                    |
+| Outlook (work)         | 7     | 2      | 3.5   | MCP server running locally [015]                                         |
+| Reminders/alarms       | 8     | 2      | 4.0   | node-cron + notifications [014]                                          |
 | **System Control**     |       |        |       |                                                                          |
-| Run shell commands     | 9     | 2      | 4.5   | Powerful but dangerous                                                   |
-| File System Agent      | 8     | 2      | 4.0   | Unified file expert: search + CRUD + watch + compound ops                |
+| Run shell commands     | 9     | 2      | 4.5   | Powerful but dangerous [010]                                             |
+| File System Agent      | 8     | 2      | 4.0   | Unified file expert: search + CRUD + watch + compound ops [007]          |
 | App launching          | 5     | 2      | 2.5   | OS-specific                                                              |
-| Clipboard access       | 6     | 2      | 3.0   | WSL→Windows bridge via clip.exe/PS                                       |
+| Clipboard access       | 6     | 2      | 3.0   | WSL→Windows bridge via clip.exe/PS [016]                                 |
 | **Communication**      |       |        |       |                                                                          |
-| Voice input (STT)      | 4     | 3      | 1.33  | Whisper local or API                                                     |
-| Voice output (TTS)     | 4     | 2      | 2.0   | Edge TTS, Piper, etc.                                                    |
+| Voice input (STT)      | 4     | 3      | 1.33  | Whisper local or API [025]                                               |
+| Voice output (TTS)     | 4     | 2      | 2.0   | Edge TTS, Piper, etc. [023]                                              |
 | SMS/notifications      | 5     | 3      | 1.67  | Twilio or Pushover                                                       |
 | **Smart Home**         |       |        |       |                                                                          |
-| Home Assistant         | 7     | 3      | 2.33  | REST API integration                                                     |
+| Home Assistant         | 7     | 3      | 2.33  | REST API integration [021]                                               |
 | Music control          | 5     | 2      | 2.5   | Spotify API                                                              |
 | **Intelligence**       |       |        |       |                                                                          |
-| LLM delegation         | 5     | 2      | 2.5   | Claude for complex, Gemini for research                                  |
-| Proactive suggestions  | 10    | 4      | 2.5   | Pattern recognition, context                                             |
-| Learning preferences   | 7     | 3      | 2.33  | Expand key facts system                                                  |
-| Multi-step planning    | 8     | 3      | 2.67  | Single-agent ReAct loops within domain                                   |
+| LLM delegation         | 5     | 2      | 2.5   | Claude for complex, Gemini for research [019]                            |
+| Proactive suggestions  | 10    | 4      | 2.5   | Pattern recognition, context [018]                                       |
+| Learning preferences   | 7     | 3      | 2.33  | Expand key facts system [022]                                            |
 | Code execution         | 7     | 3      | 2.33  | Sandboxed Python/JS                                                      |
 | **Architecture**       |       |        |       |                                                                          |
-| Conversation persist.  | 9     | 1      | 9.0   | Save/resume conversations, list history                                  |
-| Plugin architecture    | 8     | 3      | 2.67  | MCP servers + Agent interface                                            |
-| Task Breakdown Agent   | 8     | 3      | 2.67  | Planning/decomposition for multi-agent workflows, approval orchestration |
+| Agent + MCP foundation | 8     | 3      | 2.67  | ✅ Done - Agent interface + MCP client pattern [004]                     |
+| Conversation persist.  | 9     | 1      | 9.0   | Save/resume conversations, list history [005]                            |
+| Obsidian Rich Linking  | 7     | 2      | 3.5   | Wikilinks, backlinks, knowledge graph [006]                              |
+| Obsidian MCP migration | 6     | 2      | 3.0   | Move logging to external MCP server [024]                                |
+| Multi-step planning    | 8     | 3      | 2.67  | Single-agent ReAct loops, task breakdown [017]                           |
 | Multi-agent system     | 8     | 4      | 2.0   | Orchestrator + specialized agents                                        |
 | Service communication  | 7     | 3      | 2.33  | HTTP REST + Redis pub/sub                                                |
 
@@ -65,49 +67,49 @@ Building toward JARVIS - a truly useful AI assistant.
 
 ## Recommended Build Order
 
-*Architecture first, then capabilities by Score (Value/Effort ratio)*
+*Architecture first, then capabilities by Score (Value/Effort ratio). Feature IDs link to specs in `docs/features/`.*
 
 ### Phase 0: Architecture Foundation
 
-1. **Agent + MCP foundation** - Agent interface + MCP client pattern
-2. **Conversation Persistence** (9.0) - Save and resume conversations across sessions
-3. **File System Agent** (4.0) - Unified file expert: content search (Windows Index + WSL), CRUD, watch mode, compound ops like "find and organize"
-4. **Task Breakdown Agent** (2.67) - Planning/decomposition for multi-agent workflows
+1. **[004] Agent + MCP foundation** ✅ - Agent interface + MCP client pattern
+2. **[005] Conversation Persistence** (9.0) - Save and resume conversations across sessions
+3. **[006] Obsidian Rich Linking** - Wikilinks, backlinks, and knowledge graph for daily logs
+4. **[007] File System Agent** (4.0) - Unified file expert: content search (Windows Index + WSL), CRUD, watch mode, compound ops like "find and organize"
 
 *Reasoning: Multi-step workflows arise naturally once multiple agents exist. File System Agent is the first real agent implementation and handles all local file operations in one place.*
 
 ### Phase 1: Quick Wins (Score 5.0+)
 
-4. **Wikipedia lookup** (5.0) - Simple knowledge queries
-5. **Reclaim.ai integration** (5.0) - Tasks + calendar in one
+5. **[008] Wikipedia lookup** (5.0) - Simple knowledge queries
+6. **[009] Reclaim.ai integration** (5.0) - Tasks + calendar in one
 
 ### Phase 2: Core Tools (Score 4.0-4.5)
 
-6. **Shell commands** (4.5) - With approval flow
-7. **Gmail (personal)** (4.0) - Personal email, MCP server ready
-8. **Web search + page reading** (4.0) - External knowledge
-9. **Notion integration** (4.0) - Access project notes
-10. **Reminders/alarms** (4.0) - Time-based triggers
+7. **[010] Shell commands** (4.5) - With approval flow
+8. **[011] Gmail (personal)** (4.0) - Personal email, MCP server ready
+9. **[012] Web search + page reading** (4.0) - External knowledge
+10. **[013] Notion integration** (4.0) - Access project notes
+11. **[014] Reminders/alarms** (4.0) - Time-based triggers
 
 ### Phase 3: System & Email (Score 3.0-3.5)
 
-11. **Outlook (work)** (3.5) - Work email, MCP server ready
-12. **Clipboard access** (3.0) - WSL→Windows bridge
+12. **[015] Outlook (work)** (3.5) - Work email, MCP server ready
+13. **[016] Clipboard access** (3.0) - WSL→Windows bridge
 
 ### Phase 4: Intelligence (Score 2.67)
 
-13. **Multi-step planning** (2.67) - Single-agent ReAct loops within domain
+14. **[017] Multi-step planning** (2.67) - Single-agent ReAct loops within domain, task breakdown
 
 ### Phase 5: Advanced Capabilities (Score ≤ 2.5)
 
-14. **Proactive suggestions** (2.5) - "You have a meeting in 30min"
-15. **LLM delegation** (2.5) - Claude for complex, Gemini for research
-16. **RAG over local files** (2.25) - Internal knowledge base
-17. **Home Assistant** (2.33) - Smart home control
-18. **Learning preferences** (2.33) - Personalization
-19. **Voice output (TTS)** (2.0) - Spoken responses
-20. **Obsidian MCP migration** - Move logging to external MCP server
-21. **Voice input (STT)** (1.33) - Hands-free queries
+15. **[018] Proactive suggestions** (2.5) - "You have a meeting in 30min"
+16. **[019] LLM delegation** (2.5) - Claude for complex, Gemini for research
+17. **[020] RAG over local files** (2.25) - Internal knowledge base
+18. **[021] Home Assistant** (2.33) - Smart home control
+19. **[022] Learning preferences** (2.33) - Personalization
+20. **[023] Voice output (TTS)** (2.0) - Spoken responses
+21. **[024] Obsidian MCP migration** - Move logging to external MCP server
+22. **[025] Voice input (STT)** (1.33) - Hands-free queries
 
 ---
 
