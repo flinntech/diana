@@ -164,7 +164,7 @@ export async function showConversation(conversationId: string): Promise<void> {
         console.log(chalk.magenta('DIANA: ') + cleanContent);
       }
     } else if (msg.role === 'tool') {
-      console.log(chalk.yellow(`[Tool ${msg.name}]: `) + chalk.dim(msg.content.slice(0, 100) + '...'));
+      console.log(chalk.yellow(`[Tool ${msg.name}]: `) + chalk.dim(msg.content.slice(0, 100) + (msg.content.length > 100 ? '...' : '')));
     }
     console.log('');
   }

@@ -233,8 +233,13 @@ async function showConversationPicker(store: IConversationStore): Promise<string
     });
 
     return selected === '__new__' ? null : selected;
-  } catch {
-    // User cancelled (Ctrl+C)
+  } catch (err: unknown) {
+    // User cancelled (Ctrl+C) - this is expected behavior
+    if (err && typeof err === 'object' && 'name' in err && err.name === 'ExitPromptError') {
+      return null;
+    }
+    // Unexpected error - log per Constitution VI (Graceful Degradation)
+    console.error(chalk.red('Conversation picker error:'), err);
     return null;
   }
 }

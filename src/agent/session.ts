@@ -433,6 +433,7 @@ export class Session implements ISession {
    * - Save conversation to storage (Feature: 005)
    * - Clean up resources
    *
+   * @param options - Options for closing the session
    * @param options.skipSummary - Skip LLM summary generation (faster for signal handlers)
    */
   async close(options: { skipSummary?: boolean } = {}): Promise<void> {
@@ -823,7 +824,7 @@ Respond with JSON in this exact format:
         );
       }
       throw createAgentError(
-        'INVALID_RESPONSE',
+        'AGENT_UNAVAILABLE',
         `Cannot resume conversation: already in use by another session`
       );
     }

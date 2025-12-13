@@ -143,13 +143,6 @@ export class ConversationLockManager {
   }
 
   /**
-   * Check if lock is stale (process no longer running)
-   */
-  isLockStale(lock: ConversationLock): boolean {
-    return !this.isProcessAlive(lock.pid);
-  }
-
-  /**
    * Read a lock file
    */
   private async readLock(conversationId: string): Promise<ConversationLock | null> {
