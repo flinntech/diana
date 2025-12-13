@@ -1,7 +1,7 @@
 /**
  * Conversation Manager
  *
- * Feature: 002-llm-agent-core
+ * Feature: 002-llm-agent-core, 005-conversation-persistence
  * Date: 2025-12-10
  *
  * Manages conversation state, message history, and token estimation.
@@ -9,6 +9,25 @@
 
 import { randomUUID } from 'crypto';
 import type { Message, Conversation, IConversationManager } from '../types/agent.js';
+import type { SerializedMessage } from '../conversations/conversation.types.js';
+import { serializeMessage, deserializeMessage } from '../conversations/conversation.types.js';
+
+// =============================================================================
+// Types
+// =============================================================================
+
+/**
+ * Serializable state of a conversation for persistence
+ * Feature: 005-conversation-persistence
+ */
+export interface SerializableConversationState {
+  id: string;
+  messages: SerializedMessage[];
+  startedAt: string; // ISO 8601
+  lastActivity: string; // ISO 8601
+  tokenEstimate: number;
+  summarizedAt?: number;
+}
 
 // =============================================================================
 // Constants
@@ -158,6 +177,37 @@ export class ConversationManager implements IConversationManager {
   }
 
   /**
+   * Get serializable state for persistence
+   * Feature: 005-conversation-persistence (T007)
+   */
+  getSerializableState(): SerializableConversationState {
+    return {
+      id: this.conversation.id,
+      messages: this.conversation.messages.map(serializeMessage),
+      startedAt: this.conversation.startedAt.toISOString(),
+      lastActivity: this.conversation.lastActivity.toISOString(),
+      tokenEstimate: this.conversation.tokenEstimate,
+      summarizedAt: this.conversation.summarizedAt,
+    };
+  }
+
+  /**
+   * Restore state from persisted data
+   * Feature: 005-conversation-persistence (T008)
+   */
+  restoreState(state: SerializableConversationState): void {
+    // Update conversation properties
+    (this.conversation as { id: string }).id = state.id;
+    this.conversation.messages = state.messages.map(deserializeMessage);
+    (this.conversation as { startedAt: Date }).startedAt = new Date(state.startedAt);
+    this.conversation.lastActivity = new Date(state.lastActivity);
+    this.conversation.tokenEstimate = state.tokenEstimate;
+    if (state.summarizedAt !== undefined) {
+      this.conversation.summarizedAt = state.summarizedAt;
+    }
+  }
+
+  /**
    * Update the token estimate based on current messages
    */
   private updateTokenEstimate(): void {
@@ -185,4 +235,14 @@ export class ConversationManager implements IConversationManager {
  */
 export function createConversation(systemPrompt?: string): ConversationManager {
   return new ConversationManager(systemPrompt);
+}
+
+/**
+ * Create ConversationManager from persisted state
+ * Feature: 005-conversation-persistence (T009)
+ */
+export function createConversationFromState(state: SerializableConversationState): ConversationManager {
+  const manager = new ConversationManager();
+  manager.restoreState(state);
+  return manager;
 }

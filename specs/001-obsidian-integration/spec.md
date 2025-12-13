@@ -2,7 +2,7 @@
 
 **Feature Branch**: `001-obsidian-integration`
 **Created**: 2025-12-10
-**Status**: Draft
+**Status**: Implemented
 **Input**: User description: "DIANA needs the ability to write structured notes to her Obsidian vault for recording observations, reasoning, and activity logs in human-readable Markdown format."
 
 ## User Scenarios & Testing *(mandatory)*

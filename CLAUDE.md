@@ -89,6 +89,8 @@ Project principles are documented in `.specify/memory/constitution.md`.
 - JSON file (`/home/diana/proposals.json`) + Obsidian vault (audit logs) (003-file-watcher-proposals)
 - TypeScript 5.9+ with Node.js 18+ (ES modules, strict mode) + `@modelcontextprotocol/sdk` (MCP TypeScript SDK), existing DIANA framework (004-agent-mcp-foundation)
 - N/A (stateless orchestrator; MCP config in `config/mcp-servers.json`) (004-agent-mcp-foundation)
+- TypeScript 5.9+ with Node.js 18+ (ES modules, strict mode) + write-file-atomic (existing), inquirer (for interactive picker), date-fns (existing) (005-conversation-persistence)
+- JSON files in `~/.diana/conversations/` (index.json + {id}.json per conversation) (005-conversation-persistence)
 
 ## Recent Changes
 - 001-obsidian-integration: Added Node.js with TypeScript (ES modules, strict mode)

@@ -404,6 +404,8 @@ export interface ChatCommandOptions {
   debug?: boolean;
   /** Show full thinking output (default: collapsed) */
   showThinking?: boolean;
+  /** Resume a previous conversation (true = picker, string = specific ID) */
+  resume?: string | true;
 }
 
 /** Ask command options */
