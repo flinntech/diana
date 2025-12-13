@@ -39,7 +39,7 @@ export class MyAgent implements Agent {
   async execute(toolName: string, params: Record<string, unknown>): Promise<ToolResult> {
     switch (toolName) {
       case 'my_tool':
-        return this.executMyTool(params);
+        return this.executeMyTool(params);
       default:
         return { success: false, error: `Unknown tool: ${toolName}` };
     }
