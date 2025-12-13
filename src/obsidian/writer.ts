@@ -24,8 +24,13 @@ import type {
   QueuedWrite,
   WriteQueue,
   DailyLogFrontmatter,
+  BacklinksUpdateResult,
+  QueuedBacklinkUpdate,
+  ConversationAnchorInput,
+  NoteReferences,
+  BaseFrontmatter,
 } from '../types/obsidian.js';
-import { PathResolver } from './paths.js';
+import { PathResolver, getRelativePath } from './paths.js';
 import {
   generateDailyLogTemplate,
   generateActivityEntry,
@@ -33,7 +38,11 @@ import {
   generateProposalTemplate,
   generateSystemTemplate,
   generateIndexTemplate,
+  updateBacklinksSection,
+  extractBacklinksFromContent,
+  generateConversationAnchorTemplate,
 } from './templates.js';
+import { LinkManager } from './link-manager.js';
 import {
   parseNote,
   updateModified,
@@ -49,6 +58,7 @@ import {
   DiskFullError,
   fromSystemError,
   isObsidianError,
+  BacklinkUpdateError,
 } from './errors.js';
 
 // =============================================================================
@@ -99,13 +109,89 @@ class InMemoryWriteQueue implements WriteQueue {
 }
 
 // =============================================================================
+// Backlink Queue Implementation (Feature: 006-obsidian-rich-linking)
+// =============================================================================
+
+/**
+ * Queue for backlink updates with bounded size and retry tracking.
+ * Used for eventual consistency when backlink updates fail.
+ */
+class BacklinkQueue {
+  readonly maxSize = 100;
+  readonly maxRetries = 3;
+  private queue: QueuedBacklinkUpdate[] = [];
+
+  get size(): number {
+    return this.queue.length;
+  }
+
+  enqueue(update: Omit<QueuedBacklinkUpdate, 'retryCount'>): boolean {
+    if (this.isFull()) {
+      // Remove oldest to make room
+      this.queue.shift();
+    }
+
+    this.queue.push({
+      ...update,
+      retryCount: 0,
+    });
+    return true;
+  }
+
+  dequeue(): QueuedBacklinkUpdate | undefined {
+    return this.queue.shift();
+  }
+
+  peek(): QueuedBacklinkUpdate | undefined {
+    return this.queue[0];
+  }
+
+  isFull(): boolean {
+    return this.queue.length >= this.maxSize;
+  }
+
+  /** Re-enqueue with incremented retry count, returns false if max retries exceeded */
+  requeue(update: QueuedBacklinkUpdate): boolean {
+    if (update.retryCount >= this.maxRetries) {
+      return false;
+    }
+    this.queue.push({
+      ...update,
+      retryCount: update.retryCount + 1,
+    });
+    return true;
+  }
+
+  clear(): void {
+    this.queue = [];
+  }
+
+  toArray(): QueuedBacklinkUpdate[] {
+    return [...this.queue];
+  }
+
+  /** Get counts of pending updates */
+  getStatus(): { pending: number; failed: number } {
+    return {
+      pending: this.queue.filter(u => u.retryCount < this.maxRetries).length,
+      failed: this.queue.filter(u => u.retryCount >= this.maxRetries).length,
+    };
+  }
+}
+
+// =============================================================================
 // ObsidianWriter Implementation
 // =============================================================================
+
+/** Maximum concurrent backlink updates (prevents resource exhaustion) */
+const MAX_CONCURRENT_BACKLINK_UPDATES = 10;
 
 export class ObsidianWriter implements IObsidianWriter {
   private readonly config: Required<ObsidianWriterConfig>;
   private readonly pathResolver: PathResolver;
   private readonly writeQueue: WriteQueue;
+  private readonly backlinkQueue: BacklinkQueue;
+  private readonly linkManager: LinkManager;
 
   constructor(config: ObsidianWriterConfig) {
     this.config = {
@@ -119,6 +205,29 @@ export class ObsidianWriter implements IObsidianWriter {
 
     this.pathResolver = new PathResolver(this.config.vaultPath, this.config.dateFormat);
     this.writeQueue = new InMemoryWriteQueue();
+    this.backlinkQueue = new BacklinkQueue();
+    this.linkManager = new LinkManager();
+  }
+
+  /**
+   * Get the LinkManager instance for external access (e.g., queries)
+   */
+  getLinkManager(): LinkManager {
+    return this.linkManager;
+  }
+
+  /**
+   * Get the PathResolver instance for external access
+   */
+  getPathResolver(): PathResolver {
+    return this.pathResolver;
+  }
+
+  /**
+   * Get backlink queue status for user-facing output
+   */
+  getBacklinkQueueStatus(): { pending: number; failed: number } {
+    return this.backlinkQueue.getStatus();
   }
 
   // ---------------------------------------------------------------------------
@@ -199,7 +308,18 @@ export class ObsidianWriter implements IObsidianWriter {
       const content = generateObservationTemplate(input);
       await this.atomicWrite(filePath, content);
 
-      return this.successResult(filePath);
+      const result = this.successResult(filePath);
+
+      // Trigger backlink updates for related notes (Feature: 006-obsidian-rich-linking)
+      if (input.relatedNotes && input.relatedNotes.length > 0) {
+        const sourcePath = getRelativePath(this.config.vaultPath, filePath);
+        // Fire-and-forget: don't wait for backlink updates
+        this.triggerBacklinkUpdates(sourcePath, input.relatedNotes, []).catch((err) => {
+          console.warn(`[ObsidianWriter] Backlink update failed: ${err}`);
+        });
+      }
+
+      return result;
     } catch (error) {
       return this.handleWriteError(error, filePath, {
         type: 'observation',
@@ -368,6 +488,263 @@ export class ObsidianWriter implements IObsidianWriter {
     const match = content.match(/status: (pending|approved|rejected)/);
     if (match) return match[1] as 'pending' | 'approved' | 'rejected';
     return 'pending';
+  }
+
+  // ---------------------------------------------------------------------------
+  // Backlink Operations (Feature: 006-obsidian-rich-linking)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Trigger backlink updates for a note that has changed its outgoing links.
+   * This method is fire-and-forget - it queues updates and processes them.
+   *
+   * @param sourcePath - Relative path of the source note
+   * @param addedTargets - Paths that were added as links
+   * @param removedTargets - Paths that were removed as links
+   */
+  private async triggerBacklinkUpdates(
+    sourcePath: string,
+    addedTargets: string[],
+    removedTargets: string[]
+  ): Promise<void> {
+    const timestamp = formatDateTime();
+
+    // Queue adds
+    for (const target of addedTargets) {
+      this.backlinkQueue.enqueue({
+        targetPath: target,
+        sourcePath,
+        action: 'add',
+        timestamp,
+      });
+    }
+
+    // Queue removes
+    for (const target of removedTargets) {
+      this.backlinkQueue.enqueue({
+        targetPath: target,
+        sourcePath,
+        action: 'remove',
+        timestamp,
+      });
+    }
+
+    // Process queue
+    await this.processBacklinkQueue();
+  }
+
+  /**
+   * Process pending backlink updates from the queue.
+   * Respects MAX_CONCURRENT_BACKLINK_UPDATES limit.
+   */
+  private async processBacklinkQueue(): Promise<void> {
+    const updates: QueuedBacklinkUpdate[] = [];
+
+    // Collect up to MAX_CONCURRENT_BACKLINK_UPDATES
+    while (updates.length < MAX_CONCURRENT_BACKLINK_UPDATES && this.backlinkQueue.peek()) {
+      const update = this.backlinkQueue.dequeue();
+      if (update) updates.push(update);
+    }
+
+    if (updates.length === 0) return;
+
+    // Sort by target path for alphabetical lock ordering (deadlock prevention)
+    updates.sort((a, b) => a.targetPath.localeCompare(b.targetPath));
+
+    // Process each update
+    const results = await Promise.allSettled(
+      updates.map((update) => this.applyBacklinkUpdate(update))
+    );
+
+    // Re-queue failed updates
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i];
+      if (result.status === 'rejected') {
+        const update = updates[i];
+        const requeued = this.backlinkQueue.requeue(update);
+        if (!requeued) {
+          console.warn(`[ObsidianWriter] Backlink update permanently failed: ${update.targetPath}`);
+        }
+      }
+    }
+  }
+
+  /**
+   * Apply a single backlink update to a target note.
+   */
+  private async applyBacklinkUpdate(update: QueuedBacklinkUpdate): Promise<BacklinksUpdateResult> {
+    const targetFilePath = join(this.config.vaultPath, `${update.targetPath}.md`);
+
+    try {
+      // Check if target exists
+      const exists = await this.fileExists(targetFilePath);
+      if (!exists) {
+        // Dangling link - target doesn't exist
+        return {
+          targetPath: update.targetPath,
+          success: true,
+          added: [],
+          removed: [],
+        };
+      }
+
+      return await this.withFileLock(targetFilePath, async () => {
+        const content = await readFile(targetFilePath, 'utf8');
+
+        // Extract existing backlinks from content
+        const existingBacklinks = new Set(extractBacklinksFromContent(content));
+
+        // Apply the update
+        if (update.action === 'add') {
+          existingBacklinks.add(update.sourcePath);
+        } else {
+          existingBacklinks.delete(update.sourcePath);
+        }
+
+        // Update the backlinks section
+        const updatedContent = updateBacklinksSection(
+          content,
+          Array.from(existingBacklinks)
+        );
+
+        // Also update frontmatter referencedBy
+        const updatedWithFrontmatter = this.updateFrontmatterReferencedBy(
+          updatedContent,
+          Array.from(existingBacklinks),
+          targetFilePath
+        );
+
+        // Write atomically
+        await this.atomicWrite(targetFilePath, updatedWithFrontmatter);
+
+        return {
+          targetPath: update.targetPath,
+          success: true,
+          added: update.action === 'add' ? [update.sourcePath] : [],
+          removed: update.action === 'remove' ? [update.sourcePath] : [],
+        };
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      throw new BacklinkUpdateError(update.targetPath, update.sourcePath, message);
+    }
+  }
+
+  /**
+   * Update the referencedBy field in frontmatter.
+   * Creates frontmatter if it doesn't exist.
+   */
+  private updateFrontmatterReferencedBy(
+    content: string,
+    backlinks: string[],
+    filePath: string
+  ): string {
+    try {
+      const { frontmatter, content: body } = parseNote<BaseFrontmatter & NoteReferences>(content, filePath);
+      const updatedFrontmatter = {
+        ...frontmatter,
+        referencedBy: backlinks.length > 0 ? backlinks.sort() : undefined,
+      };
+      return stringifyNote(updatedFrontmatter, body);
+    } catch {
+      // If frontmatter is corrupted, just return original content
+      return content;
+    }
+  }
+
+  /**
+   * Update backlinks for a single note.
+   * Public method for manual updates (e.g., from CLI).
+   *
+   * @param targetPath - Relative path of the target note
+   * @param addSources - Source paths to add to backlinks
+   * @param removeSources - Source paths to remove from backlinks
+   */
+  async updateBacklinks(
+    targetPath: string,
+    addSources: string[],
+    removeSources: string[]
+  ): Promise<BacklinksUpdateResult> {
+    const results: BacklinksUpdateResult = {
+      targetPath,
+      success: true,
+      added: [],
+      removed: [],
+    };
+
+    for (const source of addSources) {
+      try {
+        await this.applyBacklinkUpdate({
+          targetPath,
+          sourcePath: source,
+          action: 'add',
+          retryCount: 0,
+          timestamp: formatDateTime(),
+        });
+        results.added.push(source);
+      } catch (error) {
+        results.success = false;
+        results.error = error instanceof Error ? error.message : 'Unknown error';
+      }
+    }
+
+    for (const source of removeSources) {
+      try {
+        await this.applyBacklinkUpdate({
+          targetPath,
+          sourcePath: source,
+          action: 'remove',
+          retryCount: 0,
+          timestamp: formatDateTime(),
+        });
+        results.removed.push(source);
+      } catch (error) {
+        results.success = false;
+        results.error = error instanceof Error ? error.message : 'Unknown error';
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Write a conversation anchor note to the vault.
+   * Triggers backlink updates for all referenced notes.
+   *
+   * @param input - Conversation anchor input
+   */
+  async writeConversationAnchor(input: ConversationAnchorInput): Promise<WriteResult> {
+    const filePath = this.pathResolver.getConversationAnchorPath(input.id);
+
+    try {
+      await this.ensureVaultAccessible();
+      await this.ensureDirectoryExists(dirname(filePath));
+
+      const content = generateConversationAnchorTemplate(input);
+      await this.atomicWrite(filePath, content);
+
+      const result = this.successResult(filePath);
+
+      // Trigger backlink updates for all referenced notes
+      if (input.referencedNotes.length > 0) {
+        const sourcePath = getRelativePath(this.config.vaultPath, filePath);
+        this.triggerBacklinkUpdates(sourcePath, input.referencedNotes, []).catch((err) => {
+          console.warn(`[ObsidianWriter] Conversation anchor backlink update failed: ${err}`);
+        });
+      }
+
+      return result;
+    } catch (error) {
+      return this.handleWriteError(error, filePath, {
+        type: 'observation', // Reuse observation type for queue
+        input: {
+          title: input.title,
+          context: 'Conversation anchor',
+          details: `Conversation ${input.id}`,
+        },
+        timestamp: formatDateTime(),
+      });
+    }
   }
 
   // ---------------------------------------------------------------------------

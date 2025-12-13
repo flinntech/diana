@@ -23,6 +23,13 @@ import type {
   SystemNoteInput,
   IndexSections,
   ITemplateGenerator,
+  ConversationAnchorInput,
+  RollupStats,
+} from '../types/obsidian.js';
+import {
+  BACKLINKS_MARKER_START,
+  BACKLINKS_MARKER_END,
+  BACKLINKS_HEADING,
 } from '../types/obsidian.js';
 
 // =============================================================================
@@ -303,9 +310,362 @@ export class TemplateGenerator implements ITemplateGenerator {
 }
 
 // =============================================================================
+// Backlinks Section Templates (Feature: 006-obsidian-rich-linking)
+// =============================================================================
+
+/**
+ * Generate the backlinks section content.
+ * Returns empty string if there are no backlinks.
+ *
+ * Format:
+ * ```markdown
+ * <!-- DIANA-BACKLINKS:START -->
+ * ## Backlinks
+ *
+ * - [[path/to/note1]]
+ * - [[path/to/note2]]
+ * <!-- DIANA-BACKLINKS:END -->
+ * ```
+ */
+export function generateBacklinksSection(backlinks: string[]): string {
+  if (backlinks.length === 0) {
+    return '';
+  }
+
+  // Sort for deterministic output
+  const sorted = [...backlinks].sort();
+
+  const lines = [
+    BACKLINKS_MARKER_START,
+    BACKLINKS_HEADING,
+    '',
+    ...sorted.map((link) => `- ${toWikilink(link)}`),
+    BACKLINKS_MARKER_END,
+  ];
+
+  return lines.join('\n');
+}
+
+/**
+ * Update the backlinks section in existing content.
+ * - If markers exist, replace the content between them
+ * - If no markers exist, append at the end
+ * - If backlinks is empty, remove the section entirely
+ *
+ * @param content - Existing note content
+ * @param backlinks - Array of paths to include in backlinks section
+ * @returns Updated content
+ */
+export function updateBacklinksSection(content: string, backlinks: string[]): string {
+  const section = generateBacklinksSection(backlinks);
+  const hasMarkers = content.includes(BACKLINKS_MARKER_START);
+
+  if (hasMarkers) {
+    // Replace existing section (idempotent)
+    const regex = new RegExp(
+      `${escapeRegex(BACKLINKS_MARKER_START)}[\\s\\S]*?${escapeRegex(BACKLINKS_MARKER_END)}`,
+      'g'
+    );
+
+    if (section) {
+      return content.replace(regex, section);
+    } else {
+      // Remove section and any trailing newlines before it
+      return content.replace(new RegExp(`\\n*${regex.source}\\n*`, 'g'), '\n').trimEnd() + '\n';
+    }
+  } else if (section) {
+    // Append at end (first time)
+    return content.trimEnd() + '\n\n' + section + '\n';
+  }
+
+  // No markers and no backlinks - return as is
+  return content;
+}
+
+/**
+ * Check if content has a backlinks section
+ */
+export function hasBacklinksSection(content: string): boolean {
+  return content.includes(BACKLINKS_MARKER_START) && content.includes(BACKLINKS_MARKER_END);
+}
+
+/**
+ * Extract existing backlinks from a note's content.
+ * Parses the wiki-links between the markers.
+ */
+export function extractBacklinksFromContent(content: string): string[] {
+  if (!hasBacklinksSection(content)) {
+    return [];
+  }
+
+  const regex = new RegExp(
+    `${escapeRegex(BACKLINKS_MARKER_START)}([\\s\\S]*?)${escapeRegex(BACKLINKS_MARKER_END)}`,
+    'g'
+  );
+
+  const match = regex.exec(content);
+  if (!match) {
+    return [];
+  }
+
+  const sectionContent = match[1];
+  const linkRegex = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
+  const links: string[] = [];
+
+  let linkMatch;
+  while ((linkMatch = linkRegex.exec(sectionContent)) !== null) {
+    links.push(linkMatch[1]);
+  }
+
+  return links;
+}
+
+// =============================================================================
+// Conversation Anchor Templates (Feature: 006-obsidian-rich-linking)
+// =============================================================================
+
+/**
+ * Generate conversation anchor note content
+ */
+export function generateConversationAnchorTemplate(
+  input: ConversationAnchorInput,
+  date: Date = new Date()
+): string {
+  const frontmatter = {
+    type: 'conversation-anchor' as const,
+    date: formatDate(date),
+    tags: ['diana', 'conversation'],
+    created: formatDateTime(date),
+    conversationId: input.id,
+    messageCount: input.messageCount,
+    references: input.referencedNotes,
+    jsonPath: input.jsonPath,
+  };
+
+  let content = `# Conversation: ${input.title}\n\n`;
+  content += `**Started**: ${input.startedAt.split('T')[0]} ${input.startedAt.split('T')[1]?.slice(0, 5) || ''}\n`;
+  content += `**Messages**: ${input.messageCount}\n\n`;
+
+  // Referenced notes section
+  if (input.referencedNotes.length > 0) {
+    content += `## Referenced Notes\n\n`;
+    for (const note of input.referencedNotes) {
+      content += `- ${toWikilink(note)}\n`;
+    }
+    content += '\n';
+  }
+
+  content += `## Full Conversation\n\n`;
+  content += `See: \`${input.jsonPath}\`\n`;
+
+  return stringifyNote(frontmatter, content);
+}
+
+// =============================================================================
+// Rollup Templates (Feature: 006-obsidian-rich-linking)
+// =============================================================================
+
+/**
+ * Generate weekly rollup note content
+ */
+export function generateWeeklyRollupTemplate(
+  weekStr: string,
+  year: number,
+  weekNumber: number,
+  startDate: string,
+  endDate: string,
+  stats: RollupStats,
+  notes: {
+    dailyLogs: string[];
+    observations: string[];
+    proposalsApproved: string[];
+    proposalsRejected: string[];
+    proposalsPending: string[];
+    systemNotes: string[];
+  },
+  date: Date = new Date()
+): string {
+  const frontmatter = {
+    type: 'rollup' as const,
+    period: 'weekly' as const,
+    week: weekStr,
+    year,
+    weekNumber,
+    startDate,
+    endDate,
+    date: startDate,
+    tags: ['diana', 'rollup', 'weekly'],
+    created: formatDateTime(date),
+    stats,
+  };
+
+  let content = `# Week ${weekNumber} - ${year}\n\n`;
+  content += `## Summary\n\n`;
+  content += `This week: ${stats.dailyLogs} daily logs, ${stats.observations} observations, `;
+  content += `${stats.proposals} proposals (${stats.proposalsApproved} approved, ${stats.proposalsPending} pending).\n\n`;
+
+  // Statistics section
+  content += `## Statistics\n\n`;
+  content += `- **Daily Logs**: ${stats.dailyLogs} entries\n`;
+  content += `- **Observations**: ${stats.observations} notes\n`;
+  content += `- **Proposals**: ${stats.proposals} total (${stats.proposalsApproved} approved, ${stats.proposalsPending} pending)\n`;
+  content += `- **System Notes**: ${stats.systemNotes} entries\n\n`;
+
+  // Daily Logs
+  if (notes.dailyLogs.length > 0) {
+    content += `## Daily Logs\n\n`;
+    for (const log of notes.dailyLogs) {
+      content += `- ${toWikilink(log)}\n`;
+    }
+    content += '\n';
+  }
+
+  // Observations
+  if (notes.observations.length > 0) {
+    content += `## Observations\n\n`;
+    for (const obs of notes.observations) {
+      content += `- ${toWikilink(obs)}\n`;
+    }
+    content += '\n';
+  }
+
+  // Proposals
+  if (stats.proposals > 0) {
+    content += `## Proposals\n\n`;
+    if (notes.proposalsApproved.length > 0) {
+      content += `### Approved\n\n`;
+      for (const prop of notes.proposalsApproved) {
+        content += `- ${toWikilink(prop)}\n`;
+      }
+      content += '\n';
+    }
+    if (notes.proposalsPending.length > 0) {
+      content += `### Pending\n\n`;
+      for (const prop of notes.proposalsPending) {
+        content += `- ${toWikilink(prop)}\n`;
+      }
+      content += '\n';
+    }
+    if (notes.proposalsRejected.length > 0) {
+      content += `### Rejected\n\n`;
+      for (const prop of notes.proposalsRejected) {
+        content += `- ${toWikilink(prop)}\n`;
+      }
+      content += '\n';
+    }
+  }
+
+  // System Notes
+  if (notes.systemNotes.length > 0) {
+    content += `## System Notes\n\n`;
+    for (const sys of notes.systemNotes) {
+      content += `- ${toWikilink(sys)}\n`;
+    }
+  }
+
+  return stringifyNote(frontmatter, content);
+}
+
+/**
+ * Generate monthly rollup note content
+ */
+export function generateMonthlyRollupTemplate(
+  monthStr: string,
+  year: number,
+  monthNumber: number,
+  startDate: string,
+  endDate: string,
+  stats: RollupStats,
+  notes: {
+    dailyLogs: string[];
+    observations: string[];
+    proposalsApproved: string[];
+    proposalsRejected: string[];
+    proposalsPending: string[];
+    systemNotes: string[];
+  },
+  weeks: string[],
+  date: Date = new Date()
+): string {
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  const monthName = monthNames[monthNumber - 1] || 'Unknown';
+
+  const frontmatter = {
+    type: 'rollup' as const,
+    period: 'monthly' as const,
+    month: monthStr,
+    year,
+    monthNumber,
+    startDate,
+    endDate,
+    date: startDate,
+    tags: ['diana', 'rollup', 'monthly'],
+    created: formatDateTime(date),
+    stats,
+    weeks,
+  };
+
+  let content = `# ${monthName} ${year}\n\n`;
+  content += `## Summary\n\n`;
+  content += `This month: ${stats.dailyLogs} daily logs, ${stats.observations} observations, `;
+  content += `${stats.proposals} proposals (${stats.proposalsApproved} approved, ${stats.proposalsPending} pending).\n\n`;
+
+  // Statistics section
+  content += `## Statistics\n\n`;
+  content += `- **Daily Logs**: ${stats.dailyLogs} entries\n`;
+  content += `- **Observations**: ${stats.observations} notes\n`;
+  content += `- **Proposals**: ${stats.proposals} total (${stats.proposalsApproved} approved, ${stats.proposalsPending} pending)\n`;
+  content += `- **System Notes**: ${stats.systemNotes} entries\n`;
+  if (weeks.length > 0) {
+    content += `- **Weeks**: ${weeks.join(', ')}\n`;
+  }
+  content += '\n';
+
+  // Observations (highlight for monthly)
+  if (notes.observations.length > 0) {
+    content += `## Key Observations\n\n`;
+    for (const obs of notes.observations) {
+      content += `- ${toWikilink(obs)}\n`;
+    }
+    content += '\n';
+  }
+
+  // Proposals
+  if (stats.proposals > 0) {
+    content += `## Proposals\n\n`;
+    if (notes.proposalsApproved.length > 0) {
+      content += `### Approved\n\n`;
+      for (const prop of notes.proposalsApproved) {
+        content += `- ${toWikilink(prop)}\n`;
+      }
+      content += '\n';
+    }
+    if (notes.proposalsPending.length > 0) {
+      content += `### Pending\n\n`;
+      for (const prop of notes.proposalsPending) {
+        content += `- ${toWikilink(prop)}\n`;
+      }
+      content += '\n';
+    }
+  }
+
+  return stringifyNote(frontmatter, content);
+}
+
+// =============================================================================
 // Utilities
 // =============================================================================
 
 function capitalize(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+/**
+ * Escape special regex characters in a string
+ */
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

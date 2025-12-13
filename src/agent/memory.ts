@@ -32,6 +32,7 @@ const MAX_RECENT_IN_CONTEXT = 5;
 
 /**
  * Parse facts from markdown content
+ * Supports "(from [[path]])" provenance format (Feature: 006-obsidian-rich-linking)
  */
 function parseFacts(content: string): KeyFact[] {
   const facts: KeyFact[] = [];
@@ -55,15 +56,14 @@ function parseFacts(content: string): KeyFact[] {
 
     // Parse list items
     if (trimmed.startsWith('- ') && currentSection) {
-      const factText = trimmed.slice(2).trim();
+      let factText = trimmed.slice(2).trim();
 
       // Extract date from [YYYY-MM-DD] prefix if present
       const dateMatch = factText.match(/^\[(\d{4}-\d{2}-\d{2})\]\s*/);
-      let content = factText;
       let createdAt = new Date();
 
       if (dateMatch) {
-        content = factText.slice(dateMatch[0].length);
+        factText = factText.slice(dateMatch[0].length);
         try {
           createdAt = parseISO(dateMatch[1]);
         } catch {
@@ -71,13 +71,21 @@ function parseFacts(content: string): KeyFact[] {
         }
       }
 
+      // Extract sourceNote from "(from [[path]])" pattern (before tags)
+      let sourceNote: string | undefined;
+      const sourceMatch = factText.match(/\(from \[\[([^\]]+)\]\]\)/);
+      if (sourceMatch) {
+        sourceNote = sourceMatch[1];
+        factText = factText.replace(sourceMatch[0], '').trim();
+      }
+
       // Extract tags
       const tags: string[] = [];
-      const tagMatches = content.match(/#\w+/g);
+      const tagMatches = factText.match(/#\w+/g);
       if (tagMatches) {
         tags.push(...tagMatches);
         // Remove tags from content
-        content = content.replace(/#\w+/g, '').trim();
+        factText = factText.replace(/#\w+/g, '').trim();
       }
 
       // Add #important tag for items in important section
@@ -86,9 +94,10 @@ function parseFacts(content: string): KeyFact[] {
       }
 
       facts.push({
-        content,
+        content: factText,
         tags,
         createdAt,
+        sourceNote,
       });
     }
   }
@@ -98,15 +107,20 @@ function parseFacts(content: string): KeyFact[] {
 
 /**
  * Format facts to markdown content
+ * Includes "(from [[path]])" provenance format (Feature: 006-obsidian-rich-linking)
  */
 function formatFacts(facts: KeyFact[]): string {
   const lines: string[] = [];
 
-  // Add frontmatter
+  // Add frontmatter (includes date/tags for vault validator compatibility)
+  // Note: dates must be quoted to prevent gray-matter from converting to Date objects
+  const now = new Date();
   lines.push('---');
   lines.push('type: memory');
-  lines.push(`created: ${format(new Date(), "yyyy-MM-dd'T'HH:mm:ss")}`);
-  lines.push(`modified: ${format(new Date(), "yyyy-MM-dd'T'HH:mm:ss")}`);
+  lines.push(`date: '${format(now, 'yyyy-MM-dd')}'`);
+  lines.push('tags: []');
+  lines.push(`created: '${format(now, "yyyy-MM-dd'T'HH:mm:ss")}'`);
+  lines.push(`modified: '${format(now, "yyyy-MM-dd'T'HH:mm:ss")}'`);
   lines.push('---');
   lines.push('');
   lines.push('# Key Facts');
@@ -125,7 +139,8 @@ function formatFacts(facts: KeyFact[]): string {
   if (importantFacts.length > 0) {
     for (const fact of importantFacts) {
       const tagStr = fact.tags.filter((t) => t !== '#important').join(' ');
-      lines.push(`- ${fact.content}${tagStr ? ' ' + tagStr : ''} #important`);
+      const sourceStr = fact.sourceNote ? ` (from [[${fact.sourceNote}]])` : '';
+      lines.push(`- ${fact.content}${sourceStr}${tagStr ? ' ' + tagStr : ''} #important`);
     }
   }
   lines.push('');
@@ -137,7 +152,8 @@ function formatFacts(facts: KeyFact[]): string {
     for (const fact of recentFacts) {
       const dateStr = format(fact.createdAt, 'yyyy-MM-dd');
       const tagStr = fact.tags.join(' ');
-      lines.push(`- [${dateStr}] ${fact.content}${tagStr ? ' ' + tagStr : ''}`);
+      const sourceStr = fact.sourceNote ? ` (from [[${fact.sourceNote}]])` : '';
+      lines.push(`- [${dateStr}] ${fact.content}${sourceStr}${tagStr ? ' ' + tagStr : ''}`);
     }
   }
   lines.push('');
@@ -196,6 +212,8 @@ export class KeyFactStore implements IKeyFactStore {
 
   /**
    * Add a new fact
+   * If fact already exists, updates tags and optionally sourceNote
+   * (Feature: 006-obsidian-rich-linking - sourceNote support)
    */
   addFact(fact: KeyFact): void {
     // Check for duplicate content (simple matching)
@@ -205,12 +223,14 @@ export class KeyFactStore implements IKeyFactStore {
     );
 
     if (existingIndex >= 0) {
-      // Update existing fact (keep original createdAt, update tags)
+      // Update existing fact (keep original createdAt, merge tags, update sourceNote if provided)
       const existing = this.facts[existingIndex];
       this.facts[existingIndex] = {
         ...fact,
         createdAt: existing.createdAt,
         tags: [...new Set([...existing.tags, ...fact.tags])],
+        // Keep existing sourceNote if new one is not provided
+        sourceNote: fact.sourceNote ?? existing.sourceNote,
       };
     } else {
       // Add new fact

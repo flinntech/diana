@@ -14,6 +14,7 @@ import { chatCommand } from './chat.js';
 import { askCommand } from './ask.js';
 import { watchCommand } from './watch.js';
 import { listConversations, showConversation, deleteConversation } from './conversations.js';
+import { migrateVault, validateVault, rollupWeekly, rollupMonthly } from './vault.js';
 
 // =============================================================================
 // CLI Setup
@@ -77,6 +78,40 @@ conversationsCmd
   .description('Delete a conversation')
   .option('-f, --force', 'Skip confirmation')
   .action(deleteConversation);
+
+// Vault subcommand (Feature: 006-obsidian-rich-linking)
+const vaultCmd = program
+  .command('vault')
+  .description('Manage Obsidian vault (migration, validation)');
+
+vaultCmd
+  .command('migrate')
+  .description('Add backlinks sections to all notes in the vault')
+  .option('--dry-run', 'Show what would be changed without making modifications')
+  .action(migrateVault);
+
+vaultCmd
+  .command('validate')
+  .description('Check vault consistency (backlinks match actual references)')
+  .option('--repair', 'Fix any inconsistencies found')
+  .action(validateVault);
+
+// Rollup subcommand
+const rollupCmd = vaultCmd
+  .command('rollup')
+  .description('Generate knowledge rollup notes');
+
+rollupCmd
+  .command('weekly')
+  .description('Generate a weekly rollup note')
+  .option('--date <date>', 'Generate for a specific week (YYYY-MM-DD, any date in the week)')
+  .action(rollupWeekly);
+
+rollupCmd
+  .command('monthly')
+  .description('Generate a monthly rollup note')
+  .option('--date <date>', 'Generate for a specific month (YYYY-MM-DD, any date in the month)')
+  .action(rollupMonthly);
 
 // Parse arguments and execute
 program.parse();

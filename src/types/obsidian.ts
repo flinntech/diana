@@ -28,7 +28,7 @@ export type ProposalStatus = 'pending' | 'approved' | 'rejected';
 export type SystemCategory = 'health' | 'maintenance' | 'error' | 'config' | 'startup' | 'shutdown';
 
 /** Note types */
-export type NoteType = 'daily-log' | 'observation' | 'proposal' | 'system' | 'index';
+export type NoteType = 'daily-log' | 'observation' | 'proposal' | 'system' | 'index' | 'rollup' | 'conversation-anchor';
 
 // =============================================================================
 // Frontmatter Interfaces
@@ -168,6 +168,9 @@ export type ObsidianErrorCode =
   | 'CORRUPTED_NOTE'
   | 'LOCK_TIMEOUT'
   | 'DISK_FULL'
+  | 'INVALID_WIKILINK'
+  | 'BACKLINK_UPDATE_FAILED'
+  | 'MIGRATION_FAILED'
   | 'UNKNOWN_ERROR';
 
 // =============================================================================
@@ -283,4 +286,224 @@ export interface IObsidianWriter {
   updateIndex(): Promise<WriteResult>;
   isVaultAccessible(): Promise<boolean>;
   getVaultStats(): Promise<VaultStats>;
+}
+
+// =============================================================================
+// Wiki-Link Types (Feature: 006-obsidian-rich-linking)
+// =============================================================================
+
+/**
+ * Represents a parsed wiki-link extracted from note content.
+ * Source of truth: Content wiki-links are authoritative; frontmatter is derived.
+ */
+export interface WikiLink {
+  /** Full original text (e.g., `[[path|alias]]`) */
+  raw: string;
+  /** Target note path without extension */
+  path: string;
+  /** Display text (after `|`) */
+  alias?: string;
+  /** Target heading (after `#`) */
+  heading?: string;
+  /** Target block ID (after `^`) */
+  blockId?: string;
+  /** Whether prefixed with `!` (embed) */
+  isEmbed: boolean;
+}
+
+/**
+ * Extended frontmatter fields for tracking note relationships.
+ * Arrays contain normalized vault-relative paths (without `.md`).
+ */
+export interface NoteReferences {
+  /** Outgoing links (paths this note links to) */
+  references?: string[];
+  /** Incoming links (paths that link to this note) */
+  referencedBy?: string[];
+}
+
+/**
+ * Link direction for queries
+ */
+export type LinkDirection = 'incoming' | 'outgoing' | 'both';
+
+/**
+ * Result of querying related notes
+ */
+export interface RelatedNotesResult {
+  /** Notes that link to this note */
+  incoming: string[];
+  /** Notes that this note links to */
+  outgoing: string[];
+}
+
+// =============================================================================
+// Backlinks Types (Feature: 006-obsidian-rich-linking)
+// =============================================================================
+
+/** HTML comment markers for backlinks section */
+export const BACKLINKS_MARKER_START = '<!-- DIANA-BACKLINKS:START -->';
+export const BACKLINKS_MARKER_END = '<!-- DIANA-BACKLINKS:END -->';
+export const BACKLINKS_HEADING = '## Backlinks';
+
+/**
+ * Result of updating backlinks for a note
+ */
+export interface BacklinksUpdateResult {
+  /** Target note that was updated */
+  targetPath: string;
+  /** Whether the update succeeded */
+  success: boolean;
+  /** Paths added to backlinks */
+  added: string[];
+  /** Paths removed from backlinks */
+  removed: string[];
+  /** Error message if failed */
+  error?: string;
+}
+
+/**
+ * Pending backlink update in the retry queue
+ */
+export interface QueuedBacklinkUpdate {
+  /** Target note path */
+  targetPath: string;
+  /** Source note path */
+  sourcePath: string;
+  /** Action to perform */
+  action: 'add' | 'remove';
+  /** Number of retry attempts */
+  retryCount: number;
+  /** Timestamp of original request */
+  timestamp: ISODateTime;
+}
+
+// =============================================================================
+// Rollup Types (Feature: 006-obsidian-rich-linking)
+// =============================================================================
+
+/** Rollup period type */
+export type RollupPeriod = 'weekly' | 'monthly';
+
+/**
+ * Aggregated statistics for a rollup note
+ */
+export interface RollupStats {
+  /** Count of daily log entries */
+  dailyLogs: number;
+  /** Count of observations */
+  observations: number;
+  /** Total proposals */
+  proposals: number;
+  /** Approved proposals */
+  proposalsApproved: number;
+  /** Rejected proposals */
+  proposalsRejected: number;
+  /** Pending proposals */
+  proposalsPending: number;
+  /** Count of system notes */
+  systemNotes: number;
+}
+
+/**
+ * Weekly rollup frontmatter
+ */
+export interface WeeklyRollupFrontmatter extends BaseFrontmatter {
+  type: 'rollup';
+  /** Period type */
+  period: 'weekly';
+  /** ISO week string (e.g., `2025-W50`) */
+  week: string;
+  /** Year number */
+  year: number;
+  /** Week number (1-53) */
+  weekNumber: number;
+  /** Monday of the week (ISO date) */
+  startDate: ISODate;
+  /** Sunday of the week (ISO date) */
+  endDate: ISODate;
+  /** Aggregated statistics */
+  stats: RollupStats;
+}
+
+/**
+ * Monthly rollup frontmatter
+ */
+export interface MonthlyRollupFrontmatter extends BaseFrontmatter {
+  type: 'rollup';
+  /** Period type */
+  period: 'monthly';
+  /** ISO month string (e.g., `2025-12`) */
+  month: string;
+  /** Year number */
+  year: number;
+  /** Month number (1-12) */
+  monthNumber: number;
+  /** First day of month (ISO date) */
+  startDate: ISODate;
+  /** Last day of month (ISO date) */
+  endDate: ISODate;
+  /** Aggregated statistics */
+  stats: RollupStats;
+  /** ISO weeks contained in this month */
+  weeks?: string[];
+}
+
+/** Union of rollup frontmatter types */
+export type RollupFrontmatter = WeeklyRollupFrontmatter | MonthlyRollupFrontmatter;
+
+// =============================================================================
+// Conversation Anchor Types (Feature: 006-obsidian-rich-linking)
+// =============================================================================
+
+/**
+ * Stub note bridging conversation JSON to vault.
+ */
+export interface ConversationAnchorFrontmatter extends BaseFrontmatter {
+  type: 'conversation-anchor';
+  /** Conversation UUID */
+  conversationId: string;
+  /** Number of user+assistant messages */
+  messageCount: number;
+  /** Vault notes mentioned in conversation */
+  references: string[];
+  /** Path to full conversation JSON */
+  jsonPath: string;
+}
+
+/**
+ * Input for creating a conversation anchor
+ */
+export interface ConversationAnchorInput {
+  /** Conversation UUID */
+  id: string;
+  /** LLM-generated title */
+  title: string;
+  /** Conversation start time */
+  startedAt: ISODateTime;
+  /** Number of messages */
+  messageCount: number;
+  /** Vault notes referenced in conversation */
+  referencedNotes: string[];
+  /** Path to conversation JSON file */
+  jsonPath: string;
+}
+
+// =============================================================================
+// Key Fact Provenance Types (Feature: 006-obsidian-rich-linking)
+// =============================================================================
+
+/**
+ * Extended KeyFact with optional source provenance.
+ * Format with provenance: "User prefers dark mode (from [[path]]) #preference"
+ */
+export interface KeyFactWithProvenance {
+  /** Fact text content */
+  content: string;
+  /** Hashtags for categorization */
+  tags: string[];
+  /** When fact was learned */
+  createdAt: Date;
+  /** Wiki-link to source observation (optional) */
+  sourceNote?: string;
 }
