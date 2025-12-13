@@ -108,6 +108,46 @@ export class DiskFullError extends ObsidianWriteError {
   }
 }
 
+// =============================================================================
+// Link-Related Errors (Feature: 006-obsidian-rich-linking)
+// =============================================================================
+
+/** Thrown when a wiki-link is invalid (empty, contains invalid chars, etc.) */
+export class InvalidWikiLinkError extends ObsidianWriteError {
+  constructor(link: string, reason: string) {
+    super(
+      'INVALID_WIKILINK',
+      `Invalid wiki-link "${link}": ${reason}`,
+      { link, reason }
+    );
+    this.name = 'InvalidWikiLinkError';
+  }
+}
+
+/** Thrown when a backlink update fails */
+export class BacklinkUpdateError extends ObsidianWriteError {
+  constructor(targetPath: string, sourcePath: string, reason?: string) {
+    super(
+      'BACKLINK_UPDATE_FAILED',
+      `Failed to update backlinks in ${targetPath} from ${sourcePath}${reason ? `: ${reason}` : ''}`,
+      { targetPath, sourcePath, reason }
+    );
+    this.name = 'BacklinkUpdateError';
+  }
+}
+
+/** Thrown when vault migration fails */
+export class MigrationError extends ObsidianWriteError {
+  constructor(message: string, details?: Record<string, unknown>) {
+    super(
+      'MIGRATION_FAILED',
+      message,
+      details
+    );
+    this.name = 'MigrationError';
+  }
+}
+
 /**
  * Check if an error is a known Obsidian error
  */

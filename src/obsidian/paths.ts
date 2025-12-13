@@ -5,8 +5,8 @@
  */
 
 import { join, normalize, relative, isAbsolute } from 'node:path';
-import { format } from 'date-fns';
-import type { IPathResolver, SystemCategory } from '../types/obsidian.js';
+import { format, getWeek, getWeekYear } from 'date-fns';
+import type { IPathResolver, SystemCategory, RollupPeriod } from '../types/obsidian.js';
 
 /**
  * Path resolver implementation for generating vault paths
@@ -105,6 +105,53 @@ export class PathResolver implements IPathResolver {
    */
   getDirectoryPath(type: 'daily' | 'observations' | 'proposals' | 'system'): string {
     return join(this.vaultPath, type);
+  }
+
+  // ===========================================================================
+  // Rich Linking Paths (Feature: 006-obsidian-rich-linking)
+  // ===========================================================================
+
+  /**
+   * Get the path for a rollup note (weekly or monthly)
+   * Format: /rollups/weekly/YYYY-WNN.md or /rollups/monthly/YYYY-MM.md
+   *
+   * Uses ISO 8601 week dates (week starts on Monday, first week contains Jan 4).
+   */
+  getRollupPath(period: RollupPeriod, date: Date = new Date()): string {
+    if (period === 'weekly') {
+      // ISO 8601 week: starts Monday, first week contains Jan 4
+      const week = getWeek(date, { weekStartsOn: 1, firstWeekContainsDate: 4 });
+      const year = getWeekYear(date, { weekStartsOn: 1, firstWeekContainsDate: 4 });
+      const weekStr = String(week).padStart(2, '0');
+      return join(this.vaultPath, 'rollups', 'weekly', `${year}-W${weekStr}.md`);
+    }
+    // Monthly
+    return join(this.vaultPath, 'rollups', 'monthly', `${format(date, 'yyyy-MM')}.md`);
+  }
+
+  /**
+   * Get the path for a conversation anchor note
+   * Format: /conversations/UUID.md
+   */
+  getConversationAnchorPath(conversationId: string): string {
+    return join(this.vaultPath, 'conversations', `${conversationId}.md`);
+  }
+
+  /**
+   * Get the rollups directory path
+   */
+  getRollupsPath(period?: RollupPeriod): string {
+    if (period) {
+      return join(this.vaultPath, 'rollups', period);
+    }
+    return join(this.vaultPath, 'rollups');
+  }
+
+  /**
+   * Get the conversations directory path
+   */
+  getConversationsPath(): string {
+    return join(this.vaultPath, 'conversations');
   }
 }
 

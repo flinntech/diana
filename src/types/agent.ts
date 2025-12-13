@@ -212,6 +212,9 @@ export interface KeyFact {
 
   /** Conversation ID where learned */
   source?: string;
+
+  /** Wiki-link to source observation (Feature: 006-obsidian-rich-linking) */
+  sourceNote?: string;
 }
 
 /** Key fact store interface */

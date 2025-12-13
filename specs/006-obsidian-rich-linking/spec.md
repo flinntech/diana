@@ -89,22 +89,31 @@ DIANA periodically generates summary notes showing knowledge evolution over time
   - The system should not create the target note, but should track the reference for when the target is eventually created.
 
 - How does the system handle circular references (A links to B, B links to A)?
-  - Both notes should have the other in their `referencedBy` arrays; the system must avoid infinite loops during updates.
+  - Both notes should have the other in their `referencedBy` arrays; the system must avoid infinite loops during updates. Deadlock prevention: acquire locks in alphabetical order by file path.
 
 - What happens if the vault becomes inaccessible during a backlink update?
-  - The write queue mechanism (existing) should queue the backlink update for retry; the source note write should still succeed.
+  - The write queue mechanism (existing) should queue the backlink update for retry; the source note write should still succeed (eventual consistency model).
+
+- What happens if backlink update to a target note fails (e.g., lock timeout)?
+  - Queue the failed backlink update for retry (up to 3 attempts with exponential backoff); the source note write succeeds. System maintains eventual consistency rather than strict atomicity across files.
 
 - How does migration handle notes with existing manual "Backlinks" sections?
   - Migration should merge with existing sections, avoiding duplicates, and preserve user-added content.
+
+- What happens if migration fails mid-process?
+  - Migration is idempotent and resume-safe. Users can re-run from the start safely; already-processed notes will be skipped or updated consistently.
+
+- How should migration handle notes without frontmatter or with corrupted frontmatter?
+  - Notes without frontmatter: add empty frontmatter block and proceed with link extraction. Notes with corrupted/malformed frontmatter: skip and log for manual review.
 
 ## Requirements
 
 ### Functional Requirements
 
-- **FR-001**: System MUST track outgoing links (`references`) in note frontmatter when notes are created or updated.
-- **FR-002**: System MUST track incoming links (`referencedBy`) in target note frontmatter when references are created.
+- **FR-001**: System MUST track outgoing links (`references`) in note frontmatter when notes are created or updated. Frontmatter is derived from content wiki-links (content is authoritative).
+- **FR-002**: System MUST track incoming links (`referencedBy`) in target note frontmatter when references are created. Frontmatter is derived/cached; content wiki-links are the source of truth.
 - **FR-003**: System MUST auto-generate a "## Backlinks" section in notes that have incoming links.
-- **FR-004**: System MUST update backlinks atomically to prevent corruption during concurrent writes.
+- **FR-004**: System MUST update backlinks atomically to prevent corruption during concurrent writes. Lock acquisition timeout is 5 seconds; on timeout, queue for retry (fail silently).
 - **FR-005**: System MUST remove backlink references when the source note no longer links to the target.
 - **FR-006**: System MUST support extracting wiki-links from note content in `[[path]]` and `[[path|display]]` formats.
 - **FR-007**: Facts MUST include optional `sourceNote` field linking to the observation that established the fact.
@@ -114,6 +123,7 @@ DIANA periodically generates summary notes showing knowledge evolution over time
 - **FR-011**: System MUST provide a migration utility to add backlink tracking to existing vault notes.
 - **FR-012**: LLM tools MUST expose `relatedNotes` parameter for creating linked observations and daily notes.
 - **FR-013**: System MUST provide a tool for querying related notes (incoming, outgoing, or both directions).
+- **FR-014**: System MUST provide an on-demand validation command to detect and repair orphaned backlinks (stale `referencedBy` entries where source no longer exists or links).
 
 ### Key Entities
 
@@ -135,6 +145,20 @@ DIANA periodically generates summary notes showing knowledge evolution over time
 - **SC-006**: Migration utility processes existing vaults and adds backlink tracking without data loss (verified via dry-run mode).
 - **SC-007**: Conversation anchors are created for 100% of conversations that reference vault notes.
 
+## Clarifications
+
+### Session 2025-12-13
+
+- Q: What happens if source note write succeeds but backlink update to target fails? → A: Queue failed backlink for retry, source write succeeds (eventual consistency)
+- Q: What should happen if migration fails mid-process? → A: Resume-safe (migration is idempotent, can re-run from start safely)
+- Q: Should the system detect and repair orphaned backlinks? → A: On-demand validation command (e.g., `diana vault validate`)
+- Q: How many retry attempts for queued backlink updates? → A: 3 retries with exponential backoff
+- Q: What is the source of truth for link relationships? → A: Content wiki-links are authoritative; frontmatter (`references`, `referencedBy`) is derived/cached
+- Q: What lock timeout for backlink updates, and what happens on timeout? → A: 5 second timeout; fail silently and queue for retry
+- Q: How to prevent deadlocks with circular references? → A: Acquire locks in alphabetical order by file path
+- Q: How should migration handle notes without/corrupted frontmatter? → A: Add frontmatter if missing; skip corrupted with logging for manual review
+- Q: What are the responsibility boundaries between LinkManager and ObsidianWriter? → A: LinkManager extracts + tracks links in memory; ObsidianWriter handles all file I/O (including backlink writes)
+
 ## Assumptions
 
 - The existing Obsidian vault structure (daily/, observations/, proposals/, system/) is maintained.
@@ -142,3 +166,4 @@ DIANA periodically generates summary notes showing knowledge evolution over time
 - Conversation persistence (Feature 005) is complete and provides conversation metadata including referenced notes.
 - Users access the vault primarily through Obsidian, which natively supports wiki-link navigation.
 - Rollup generation can be triggered manually or via scheduled task; automatic scheduling is out of scope for initial implementation.
+- Component boundaries: LinkManager is responsible for link extraction and in-memory tracking; ObsidianWriter owns all file I/O including backlink updates (single responsibility).

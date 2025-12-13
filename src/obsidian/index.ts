@@ -1,7 +1,7 @@
 /**
  * Obsidian Integration Module Exports
  *
- * Feature: 001-obsidian-integration
+ * Features: 001-obsidian-integration, 006-obsidian-rich-linking
  */
 
 // Main writer class
@@ -18,6 +18,14 @@ export {
   generateWikilink,
   generateBidirectionalLinks,
   TemplateGenerator,
+  // 006-obsidian-rich-linking additions
+  generateBacklinksSection,
+  updateBacklinksSection,
+  extractBacklinksFromContent,
+  hasBacklinksSection,
+  generateConversationAnchorTemplate,
+  generateWeeklyRollupTemplate,
+  generateMonthlyRollupTemplate,
 } from './templates.js';
 
 // Frontmatter utilities
@@ -47,6 +55,34 @@ export {
   getRelativePath,
 } from './paths.js';
 
+// Link management (006-obsidian-rich-linking)
+export {
+  LinkManager,
+  normalizePath,
+  removeCodeBlocks,
+  validateWikiLinkPath,
+} from './link-manager.js';
+
+// Vault migration (006-obsidian-rich-linking)
+export {
+  VaultMigrator,
+  createVaultMigrator,
+} from './vault-migrator.js';
+export type {
+  MigrationResult,
+  ValidationResult,
+  RepairResult,
+} from './vault-migrator.js';
+
+// Rollup generation (006-obsidian-rich-linking)
+export {
+  RollupGenerator,
+  createRollupGenerator,
+} from './rollup-generator.js';
+export type {
+  RollupResult,
+} from './rollup-generator.js';
+
 // Error classes
 export {
   ObsidianWriteError,
@@ -58,6 +94,10 @@ export {
   DiskFullError,
   isObsidianError,
   fromSystemError,
+  // 006-obsidian-rich-linking additions
+  InvalidWikiLinkError,
+  BacklinkUpdateError,
+  MigrationError,
 } from './errors.js';
 
 // Re-export types
@@ -84,4 +124,23 @@ export type {
   ProposalFrontmatter,
   SystemFrontmatter,
   IndexFrontmatter,
+  // 006-obsidian-rich-linking additions
+  WikiLink,
+  NoteReferences,
+  BacklinksUpdateResult,
+  QueuedBacklinkUpdate,
+  RollupStats,
+  RollupPeriod,
+  WeeklyRollupFrontmatter,
+  MonthlyRollupFrontmatter,
+  ConversationAnchorFrontmatter,
+  ConversationAnchorInput,
+  KeyFactWithProvenance,
+} from '../types/obsidian.js';
+
+// Re-export backlink markers (006-obsidian-rich-linking)
+export {
+  BACKLINKS_MARKER_START,
+  BACKLINKS_MARKER_END,
+  BACKLINKS_HEADING,
 } from '../types/obsidian.js';
