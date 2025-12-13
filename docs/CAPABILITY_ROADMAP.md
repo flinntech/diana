@@ -23,43 +23,43 @@ Building toward JARVIS - a truly useful AI assistant.
 
 ## Capability Matrix
 
-| Capability             | Value | Effort | Score | Notes                                    |
-| ---------------------- | ----- | ------ | ----- | ---------------------------------------- |
-| **Information Access** |       |        |       |                                          |
-| Web search             | 8     | 2      | 4.0   | SerpAPI ready, needs page reading        |
-| Read web pages         | 8     | 2      | 4.0   | Readability.js, pairs with search        |
-| RAG over local files   | 9     | 4      | 2.25  | ChromaDB exists, needs integration       |
-| Wikipedia lookup       | 5     | 1      | 5.0   | Simple API, quick win                    |
-| **Productivity**       |       |        |       |                                          |
-| Reclaim.ai integration | 10    | 2      | 5.0   | Tasks + calendar in one, REST API exists |
-| Notion integration     | 8     | 2      | 4.0   | Project notes, MCP server exists         |
-| Gmail (personal)       | 8     | 2      | 4.0   | MCP server exists, OAuth2 ready          |
-| Outlook (work)         | 7     | 2      | 3.5   | MCP server running locally               |
-| Reminders/alarms       | 8     | 2      | 4.0   | node-cron + notifications                |
-| **System Control**     |       |        |       |                                          |
-| Run shell commands     | 9     | 2      | 4.5   | Powerful but dangerous                   |
-| File System Agent      | 8     | 2      | 4.0   | Unified file expert: search + CRUD + watch + compound ops |
-| App launching          | 5     | 2      | 2.5   | OS-specific                              |
-| Clipboard access       | 6     | 2      | 3.0   | WSL→Windows bridge via clip.exe/PS       |
-| **Communication**      |       |        |       |                                          |
-| Voice input (STT)      | 4     | 3      | 1.33  | Whisper local or API                     |
-| Voice output (TTS)     | 4     | 2      | 2.0   | Edge TTS, Piper, etc.                    |
-| SMS/notifications      | 5     | 3      | 1.67  | Twilio or Pushover                       |
-| **Smart Home**         |       |        |       |                                          |
-| Home Assistant         | 7     | 3      | 2.33  | REST API integration                     |
-| Music control          | 5     | 2      | 2.5   | Spotify API                              |
-| **Intelligence**       |       |        |       |                                          |
-| LLM delegation         | 5     | 2      | 2.5   | Claude for complex, Gemini for research  |
-| Proactive suggestions  | 10    | 4      | 2.5   | Pattern recognition, context             |
-| Learning preferences   | 7     | 3      | 2.33  | Expand key facts system                  |
-| Multi-step planning    | 8     | 3      | 2.67  | Single-agent ReAct loops within domain   |
-| Code execution         | 7     | 3      | 2.33  | Sandboxed Python/JS                      |
-| **Architecture**       |       |        |       |                                          |
-| Conversation persist.  | 9     | 1      | 9.0   | Save/resume conversations, list history  |
-| Plugin architecture    | 8     | 3      | 2.67  | MCP servers + Agent interface            |
+| Capability             | Value | Effort | Score | Notes                                                                    |
+| ---------------------- | ----- | ------ | ----- | ------------------------------------------------------------------------ |
+| **Information Access** |       |        |       |                                                                          |
+| Web search             | 8     | 2      | 4.0   | SerpAPI ready, needs page reading                                        |
+| Read web pages         | 8     | 2      | 4.0   | Readability.js, pairs with search                                        |
+| RAG over local files   | 9     | 4      | 2.25  | ChromaDB exists, needs integration                                       |
+| Wikipedia lookup       | 5     | 1      | 5.0   | Simple API, quick win                                                    |
+| **Productivity**       |       |        |       |                                                                          |
+| Reclaim.ai integration | 10    | 2      | 5.0   | Tasks + calendar in one, REST API exists                                 |
+| Notion integration     | 8     | 2      | 4.0   | Project notes, MCP server exists                                         |
+| Gmail (personal)       | 8     | 2      | 4.0   | MCP server exists, OAuth2 ready                                          |
+| Outlook (work)         | 7     | 2      | 3.5   | MCP server running locally                                               |
+| Reminders/alarms       | 8     | 2      | 4.0   | node-cron + notifications                                                |
+| **System Control**     |       |        |       |                                                                          |
+| Run shell commands     | 9     | 2      | 4.5   | Powerful but dangerous                                                   |
+| File System Agent      | 8     | 2      | 4.0   | Unified file expert: search + CRUD + watch + compound ops                |
+| App launching          | 5     | 2      | 2.5   | OS-specific                                                              |
+| Clipboard access       | 6     | 2      | 3.0   | WSL→Windows bridge via clip.exe/PS                                       |
+| **Communication**      |       |        |       |                                                                          |
+| Voice input (STT)      | 4     | 3      | 1.33  | Whisper local or API                                                     |
+| Voice output (TTS)     | 4     | 2      | 2.0   | Edge TTS, Piper, etc.                                                    |
+| SMS/notifications      | 5     | 3      | 1.67  | Twilio or Pushover                                                       |
+| **Smart Home**         |       |        |       |                                                                          |
+| Home Assistant         | 7     | 3      | 2.33  | REST API integration                                                     |
+| Music control          | 5     | 2      | 2.5   | Spotify API                                                              |
+| **Intelligence**       |       |        |       |                                                                          |
+| LLM delegation         | 5     | 2      | 2.5   | Claude for complex, Gemini for research                                  |
+| Proactive suggestions  | 10    | 4      | 2.5   | Pattern recognition, context                                             |
+| Learning preferences   | 7     | 3      | 2.33  | Expand key facts system                                                  |
+| Multi-step planning    | 8     | 3      | 2.67  | Single-agent ReAct loops within domain                                   |
+| Code execution         | 7     | 3      | 2.33  | Sandboxed Python/JS                                                      |
+| **Architecture**       |       |        |       |                                                                          |
+| Conversation persist.  | 9     | 1      | 9.0   | Save/resume conversations, list history                                  |
+| Plugin architecture    | 8     | 3      | 2.67  | MCP servers + Agent interface                                            |
 | Task Breakdown Agent   | 8     | 3      | 2.67  | Planning/decomposition for multi-agent workflows, approval orchestration |
-| Multi-agent system     | 8     | 4      | 2.0   | Orchestrator + specialized agents        |
-| Service communication  | 7     | 3      | 2.33  | HTTP REST + Redis pub/sub                |
+| Multi-agent system     | 8     | 4      | 2.0   | Orchestrator + specialized agents                                        |
+| Service communication  | 7     | 3      | 2.33  | HTTP REST + Redis pub/sub                                                |
 
 ---
 
@@ -241,6 +241,7 @@ This agent sits alongside the orchestrator conceptually—it's the "how do we br
 The architecture assumes all agents initially use the same generalist LLM (`qwen3:30b-a3b`). However, each agent encapsulates its own LLM client, allowing future specialization.
 
 **Evolution path**:
+
 1. **Baseline**: All agents use the generalist model
 2. **Instrumentation**: Track per-agent tool selection accuracy and parameter formatting
 3. **Identification**: Agents with inconsistent results become candidates for specialist models

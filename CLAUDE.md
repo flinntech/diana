@@ -91,6 +91,8 @@ Project principles are documented in `.specify/memory/constitution.md`.
 - N/A (stateless orchestrator; MCP config in `config/mcp-servers.json`) (004-agent-mcp-foundation)
 - TypeScript 5.9+ with Node.js 18+ (ES modules, strict mode) + write-file-atomic (existing), inquirer (for interactive picker), date-fns (existing) (005-conversation-persistence)
 - JSON files in `~/.diana/conversations/` (index.json + {id}.json per conversation) (005-conversation-persistence)
+- TypeScript 5.9+ with Node.js 18+ (ES modules, strict mode) + write-file-atomic, proper-lockfile, gray-matter, date-fns (all existing) (006-obsidian-rich-linking)
+- Obsidian vault (markdown files at `/mnt/c/Users/joshu/Obsidian/DIANA/DIANA_brain`) (006-obsidian-rich-linking)
 
 ## Recent Changes
 - 001-obsidian-integration: Added Node.js with TypeScript (ES modules, strict mode)
